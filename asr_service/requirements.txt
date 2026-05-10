@@ -1,0 +1,14 @@
+# DeepSpeech 0.9.3 wheels are published for Python 3.5–3.9 on Linux, macOS,
+# and Windows (x86_64). Use Python 3.9 — it's the newest version that has
+# wheels on PyPI for the deepspeech runtime.
+#
+# If you want CPU-only inference (default and recommended), use `deepspeech`.
+# For ARM (Raspberry Pi, Apple Silicon under Rosetta), use `deepspeech-tflite`
+# instead.
+
+deepspeech==0.9.3
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+python-multipart==0.0.9
+pydub==0.25.1
+numpy>=1.19,<1.27

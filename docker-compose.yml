@@ -1,0 +1,38 @@
+version: '3.9'
+
+# AyahQuest full stack: Node API + Python ASR sidecar.
+# Run with:  docker compose up --build
+# Then open: http://localhost:4000
+
+services:
+  asr:
+    build:
+      context: ./asr_service
+    ports:
+      - "5005:5005"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5005/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"
+    environment:
+      - NODE_ENV=production
+      - PORT=4000
+      - ASR_URL=http://asr:5005
+      # Uncomment to use the Quran Foundation live APIs:
+      # - QF_CLIENT_ID=your_client_id
+      # - QF_CLIENT_SECRET=your_client_secret
+      # - QF_ENV=prelive
+    depends_on:
+      asr:
+        condition: service_healthy
+    restart: unless-stopped

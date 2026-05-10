@@ -1,0 +1,148 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  font-family: 'Nunito', system-ui, sans-serif;
+  background: #FAFAFA;
+  color: #3C3C3C;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: contain;
+}
+
+.font-arabic {
+  font-family: 'Amiri Quran', 'Noto Naskh Arabic', serif;
+  direction: rtl;
+  unicode-bidi: embed;
+  line-height: 2;
+}
+
+/* Duolingo-style 3D buttons. The bottom shadow gives the "pressable" feel. */
+@layer components {
+  .duo-btn {
+    @apply font-bold uppercase tracking-wide select-none;
+    @apply px-5 py-3 rounded-2xl text-white;
+    @apply transition-transform duration-75;
+    box-shadow: 0 4px 0 0 rgba(0, 0, 0, 0.18);
+  }
+
+  .duo-btn:active {
+    transform: translateY(2px);
+    box-shadow: 0 2px 0 0 rgba(0, 0, 0, 0.18);
+  }
+
+  .duo-btn[disabled] {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .duo-btn-primary {
+    @apply duo-btn;
+    background: #58CC02;
+  }
+
+  .duo-btn-blue {
+    @apply duo-btn;
+    background: #1CB0F6;
+  }
+
+  .duo-btn-orange {
+    @apply duo-btn;
+    background: #FF9600;
+  }
+
+  .duo-btn-ghost {
+    @apply font-bold uppercase tracking-wide px-5 py-3 rounded-2xl;
+    @apply border-2 border-gray-200 text-ink;
+    @apply transition-transform duration-75 select-none;
+    box-shadow: 0 3px 0 0 rgba(0, 0, 0, 0.06);
+  }
+
+  .duo-btn-ghost:active {
+    transform: translateY(2px);
+    box-shadow: 0 1px 0 0 rgba(0, 0, 0, 0.06);
+  }
+
+  /* Selectable answer card — highlights when chosen, then turns green/red. */
+  .answer-card {
+    @apply rounded-2xl border-2 border-gray-200 bg-white;
+    @apply px-4 py-3 text-base font-semibold text-ink;
+    @apply transition-all duration-150 select-none cursor-pointer;
+    box-shadow: 0 2px 0 0 rgba(0, 0, 0, 0.05);
+  }
+
+  .answer-card.selected {
+    @apply border-accent-blue;
+    background: #DDF4FF;
+    color: #1899D6;
+  }
+
+  .answer-card.correct {
+    @apply border-brand-500;
+    background: #D7FFB8;
+    color: #58A700;
+  }
+
+  .answer-card.incorrect {
+    @apply border-accent-pink;
+    background: #FFDFE0;
+    color: #EA2B2B;
+  }
+
+  .answer-card:active {
+    transform: scale(0.98);
+  }
+
+  .heart-pip {
+    @apply inline-block w-6 h-6 rounded-full;
+    background: #FF4B4B;
+  }
+
+  .heart-pip.empty {
+    background: #E5E5E5;
+  }
+
+  /* Roadmap node — circular like Duolingo path nodes */
+  .roadmap-node {
+    @apply relative flex items-center justify-center rounded-full;
+    @apply w-20 h-20 text-3xl text-white font-extrabold;
+    box-shadow: 0 6px 0 0 rgba(0, 0, 0, 0.15);
+    transition: transform 80ms ease;
+  }
+
+  .roadmap-node:active { transform: translateY(2px); box-shadow: 0 4px 0 0 rgba(0,0,0,0.15); }
+
+  .roadmap-node.locked {
+    background: #E5E5E5;
+    color: #AFAFAF;
+  }
+
+  .roadmap-node.active {
+    background: #58CC02;
+  }
+
+  .roadmap-node.complete {
+    background: #FFC800;
+  }
+
+  /* Soft floating chip for header items (XP, hearts, streak) */
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full;
+    @apply bg-white border border-gray-100 text-sm font-bold;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  }
+}
+
+/* Scrollbar polish */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #E5E5E5; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #C8C8C8; }

@@ -1,0 +1,27 @@
+{
+  "name": "ayahquest",
+  "version": "1.1.0",
+  "description": "AyahQuest — A Duolingo-style Quran learning app for children and teens. Built on the Quran Foundation Content APIs with DeepSpeech-Quran AI recitation verification.",
+  "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm install --workspace=client && npm install --workspace=server",
+    "dev": "concurrently -n SERVER,CLIENT -c blue,green \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
+    "dev:full": "concurrently -n AI,SERVER,CLIENT -c magenta,blue,green \"npm run dev:ai\" \"npm run dev --workspace=server\" \"npm run dev --workspace=client\"",
+    "dev:ai": "cd recitation-service && python app.py",
+    "dev:server": "npm run dev --workspace=server",
+    "dev:client": "npm run dev --workspace=client",
+    "build": "npm run build --workspace=client",
+    "start": "npm run start --workspace=server",
+    "preview": "npm run preview --workspace=client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
