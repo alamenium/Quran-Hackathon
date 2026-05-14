@@ -100,7 +100,7 @@ export default function ProfilePage() {
             <span className="font-extrabold text-ink">Recitation check:</span>{' '}
             {aiStatus?.reachable ? (
               <span className="text-brand-500 font-bold">
-                AI mode — DeepSpeech-Quran sidecar
+                AI mode — faster-whisper sidecar
               </span>
             ) : aiStatus?.configured ? (
               <span className="text-accent-orange font-bold">

@@ -1,13 +1,22 @@
 // "Recite the ayah" question.
 //
-// Tries the AI path first: record real audio with MediaRecorder, send to
-// /api/recitation/verify-audio which runs the DeepSpeech-Quran model in the
-// Python sidecar. If the sidecar is unavailable (HTTP 503), falls back to
-// the Web Speech API path: transcribe in the browser, send the transcript
-// to /api/recitation/verify.
+// Decides up front which transcription path to expose:
 //
-// On browsers that support neither (rare), the question offers a friendly
-// "skip & continue" so a child is never blocked.
+//   AI mode       — sidecar is reachable AND model is loaded AND the
+//                   browser can record audio (MediaRecorder).
+//                   → record audio, POST to /api/recitation/verify-audio
+//                     (the Node server forwards to faster-whisper).
+//
+//   Fallback mode — anything else, as long as the browser supports
+//                   webkitSpeechRecognition.
+//                   → live-transcribe in the browser, POST the transcript
+//                     to /api/recitation/verify.
+//
+// If the AI sidecar dies mid-request (HTTP 503), we degrade gracefully:
+// flip into fallback mode and ask the user to tap the mic again.
+//
+// On browsers that support neither (rare) we show a friendly skip so a
+// child is never blocked.
 
 import { useEffect, useState } from 'react';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder.js';
@@ -39,34 +48,38 @@ export function Recite({ question, onAnswer, locked }) {
   }, []);
 
   const aiMode = asrUp && recorder.supported;
-  const fallbackMode = !aiMode && speech.supported;
+  const fallbackMode = (!aiMode || usedFallback) && speech.supported;
 
   const verify = async () => {
     setError(null);
     setVerifying(true);
     try {
       let res;
-      if (aiMode && recorder.blob) {
-        res = await api.verifyRecitationAudio(verse.verse_key, recorder.blob);
-      } else if (recorder.blob) {
-        // AI was supposed to be up but might have died — try anyway, fall back on 503
+      if (aiMode && !usedFallback && recorder.blob) {
         try {
           res = await api.verifyRecitationAudio(verse.verse_key, recorder.blob);
         } catch (err) {
+          // Sidecar disappeared between probe and verify — flip into
+          // fallback mode and ask the user to retry with the simple mic.
           if (err.status === 503) {
             setUsedFallback(true);
-            // No transcript available since recorder was used. Ask user to retry with mic API.
+            setAsrUp(false);
+            recorder.reset();
             setError(
-              "The AI engine isn't responding. Tap the mic again and try the simple voice mode."
+              "The AI engine isn't reachable. Tap the mic again — we'll use simple voice mode."
             );
             return;
           }
           throw err;
         }
-      } else if (speech.transcript) {
+      } else if (fallbackMode && speech.transcript) {
         res = await api.verifyRecitation(verse.verse_key, speech.transcript);
       } else {
-        setError('Please record yourself reciting first.');
+        setError(
+          aiMode
+            ? 'Please record yourself reciting first.'
+            : 'Please tap the mic and recite the ayah first.'
+        );
         return;
       }
       setResult(res);
@@ -310,8 +323,8 @@ function ResultPanel({ result, usedFallback }) {
       )}
       <div className="text-[10px] text-ink-faint">
         Engine:{' '}
-        {result.source === 'deepspeech-quran'
-          ? 'DeepSpeech-Quran AI'
+        {result.source === 'whisper'
+          ? 'Whisper AI (Arabic)'
           : 'Web Speech API'}
         {usedFallback ? ' (fallback)' : ''}
       </div>

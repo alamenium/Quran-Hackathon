@@ -7,8 +7,8 @@
 // Set GEMINI_API_KEY in .env to enable. When absent, every function
 // returns a graceful fallback so the rest of the app keeps working.
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
-const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-1.5-flash';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDrgKydbKRJxg8turcNVqoVMCodIGJ7TIg';
+const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
 
 // Shared safety settings — block anything harmful.

@@ -57,8 +57,9 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ verseKey, transcript }),
     }),
-  // Upload raw audio (Blob) for AI transcription via the DeepSpeech-Quran
-  // sidecar. Sends the bytes raw; the server reads them with express.raw.
+  // Upload raw audio (Blob) for AI transcription via the faster-whisper
+  // sidecar. Sends the bytes raw; the server reads them with express.raw,
+  // forwards to the Python service, and returns the scored result.
   verifyRecitationAudio: async (verseKey, audioBlob) => {
     const url = (import.meta.env.VITE_API_URL || '') + '/api/recitation/verify-audio';
     const res = await fetch(url, {
@@ -135,4 +136,7 @@ export const api = {
   // Stories
   stories: () => request('/api/stories'),
   story: (id) => request(`/api/stories/${id}`),
+  // Classes (recitation)
+  classes: () => request('/api/classes'),
+  class: (id) => request(`/api/classes/${encodeURIComponent(id)}`),
 };

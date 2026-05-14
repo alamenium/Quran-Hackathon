@@ -13,8 +13,10 @@ import StoryPage from './pages/StoryPage.jsx';
 import ToolkitPage from './pages/ToolkitPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
 import TutorPage from './pages/TutorPage.jsx';
+import ClassesPage from './pages/ClassesPage.jsx';
+import ClassPage from './pages/ClassPage.jsx';
 
-const FULLSCREEN_PREFIXES = ['/welcome', '/diagnostic', '/quest/', '/library/', '/tutor'];
+const FULLSCREEN_PREFIXES = ['/welcome', '/diagnostic', '/quest/', '/library/', '/tutor', '/classes/'];
 
 function isFullscreen(pathname) {
   return FULLSCREEN_PREFIXES.some((p) =>
@@ -49,6 +51,8 @@ export default function App() {
           <Route path="/toolkit" element={<ToolkitPage />} />
           <Route path="/profile" element={<ProfilePage />} />
           <Route path="/tutor" element={<TutorPage />} />
+          <Route path="/classes" element={<ClassesPage />} />
+          <Route path="/classes/:id" element={<ClassPage />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
       </Chrome>

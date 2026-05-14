@@ -1,65 +1,92 @@
 # AyahQuest
 
 > A Duolingo-style Quran learning app for children and teens. Built on the
-> Quran Foundation Content APIs with **real AI Quran recitation recognition**
-> powered by the DeepSpeech-Quran model.
+> Quran Foundation Content APIs, with **real Arabic ASR recitation
+> verification** powered by faster-whisper.
 
 AyahQuest teaches the Quran through short, friendly quests:
 **listen, understand, practice, reflect, and review mistakes**. The
-interface is a polished, mobile-first PWA modeled on Duolingo's lesson loop
-and Khan Academy Kids' storybook style.
+interface is a mobile-first PWA modelled on Duolingo's lesson loop and
+Khan Academy Kids' storybook style.
+
+This is the **only** project-level README. `asr_service/README.md` is
+kept short and only covers sidecar runtime knobs (env vars, performance
+tuning) — it never contradicts this file.
 
 ---
 
-## What's inside
+## Architecture at a glance
+
+Three processes, one HTTP boundary between each pair:
+
+```
+  Browser (Vite :5173)
+        │  /api/* (proxied)
+        ▼
+  Node API (Express :4000)
+        │  /transcribe
+        ▼
+  Python ASR (FastAPI :5005)   ← faster-whisper, Arabic
+```
+
+- The **client** is React + Vite + Tailwind. It records audio with
+  MediaRecorder and posts it to the Node API. If the ASR service is
+  down it transparently falls back to the browser's Web Speech API.
+- The **Node API** does Quran content, quests, progress, and recitation
+  scoring. For audio it forwards the bytes to the Python sidecar.
+- The **Python sidecar** (`asr_service/`) loads a faster-whisper model
+  once at startup and exposes `POST /transcribe`. No model files are
+  committed to the repo — Whisper weights download from Hugging Face
+  on first boot and cache under `~/.cache/huggingface/`.
+
+---
+
+## Repository layout
 
 ```
 ayahquest/
-├── client/              # React + Vite + Tailwind front-end (mobile-first PWA)
+├── client/              React + Vite + Tailwind front-end (mobile-first PWA)
 │   └── src/
-│       ├── components/    ← Character, Header, AudioButton, …
-│       ├── components/questions/  ← 8 question-type renderers
-│       ├── pages/         ← Home, Welcome, Diagnostic, Quest, Listen,
-│       │                    Library, Story, Toolkit, Profile
-│       ├── context/       ← ProgressContext (XP, streak, hearts)
-│       ├── hooks/         ← useAudioRecorder + useSpeechRecognition
-│       └── lib/           ← api client + character registry
-├── server/              # Node + Express API
+│       ├── components/        Character, Header, AudioButton, …
+│       ├── components/questions/   8 question-type renderers
+│       ├── pages/             Home, Welcome, Diagnostic, Quest, Listen,
+│       │                      Library, Story, Toolkit, Profile
+│       ├── context/           ProgressContext (XP, streak, hearts)
+│       ├── hooks/             useAudioRecorder, useSpeechRecognition
+│       └── lib/               api client + character registry
+├── server/              Node + Express API
 │   └── src/
-│       ├── routes/        ← /api/quran, /api/quests, /api/recitation,
-│       │                    /api/progress, /api/stories, /api/diagnostic
-│       ├── services/      ← Quran Foundation client, recitation scorer,
-│       │                    ASR forwarder, JSON user store
-│       └── data/          ← curriculum, Quran content, stories, diagnostic
-├── asr_service/         # Python FastAPI sidecar — DeepSpeech-Quran AI
+│       ├── routes/            /api/quran, /api/quests, /api/recitation,
+│       │                      /api/progress, /api/stories, /api/diagnostic
+│       ├── services/          Quran Foundation client, recitation scorer,
+│       │                      ASR forwarder, JSON user store
+│       └── data/              curriculum, Quran content, stories, diagnostic
+├── asr_service/         Python FastAPI sidecar — faster-whisper Arabic ASR
 │   ├── main.py
 │   ├── requirements.txt
 │   ├── Dockerfile
-│   └── models/
-│       ├── quran.tflite     (12 MB — acoustic model)
-│       ├── quran.scorer     (1.7 MB — language model)
-│       └── alphabet.txt
-├── docker-compose.yml   # One-command full-stack run
-├── Dockerfile           # Node API + client image
-└── package.json         # workspaces
+│   └── README.md             (runtime knobs only)
+├── docker-compose.yml   One-command full-stack run
+├── Dockerfile           Node API + client image
+└── package.json         workspaces
 ```
 
 ---
 
-## Features (MVP scope)
+## Feature set
 
-- **Diagnostic placement test** — 6 quick questions, places the user at
-  beginner / intermediate / advanced.
+- **Diagnostic placement test** — six quick questions; places the user
+  at beginner / intermediate / advanced.
 - **Roadmap** — sections → units → quests, in a Duolingo-style snake path.
 - **Daily Quest** — one curated quest per day, deterministic per user.
 - **Quest player** — eight question types:
   `choose_meaning`, `meaning_match`, `listen_choose`, `fill_blank`,
   `order_events`, `tap_ayah_lesson`, `reflection`, `recite`.
-- **Soft hearts** — wrong answers cost a heart, but the quest never blocks
-  a child; running out triggers **Review Mode** instead.
-- **🤖 Real AI recitation verification** — the DeepSpeech-Quran model
-  transcribes Arabic recitation server-side. With Web Speech API as a
-  graceful fallback. (See full details below.)
+- **Soft hearts** — wrong answers cost a heart, but the quest never
+  blocks a child; running out triggers **Review Mode** instead.
+- **AI recitation verification** — faster-whisper transcribes Arabic
+  recitation server-side; the Web Speech API is the fallback. Same
+  scoring path for both. See *"How the recitation check works"* below.
 - **Listen & Follow** — full surah view with audio, translation toggle,
   child-friendly tafsir toggle, and bookmarking.
 - **Storybook Library** — illustrated Quran stories with read-along,
@@ -70,45 +97,40 @@ ayahquest/
 
 ---
 
-## How AI recitation recognition works
+## How the recitation check works
 
-When a child taps the mic and recites an ayah:
+When the child taps the mic on a Recite question:
 
 ```
-Browser                 Node API (:4000)            Python ASR (:5005)
-───────                 ──────────────────           ──────────────────
-MediaRecorder
-  │
-  └─ records audio
-        (WebM/Opus or
-         MP4/AAC)
-                ──POST /api/recitation/verify-audio──▶
-                                                        ──POST /transcribe──▶
-                                                                              ┌──────────────┐
-                                                                              │ DeepSpeech   │
-                                                                              │ Quran .tflite│
-                                                                              │  + scorer    │
-                                                                              └──────────────┘
-                                                                                      │
-                                                                              Arabic transcript
-                                                        ◀───────── transcript ────────
-                                                  ┌─────────────────────────┐
-                                                  │ Normalize Arabic +      │
-                                                  │ Levenshtein vs canonical │
-                                                  │ verse                    │
-                                                  └─────────────────────────┘
-                ◀─── { score, status, transcript } ───
+Browser                 Node API (:4000)               Python ASR (:5005)
+───────                 ──────────────────              ──────────────────
+MediaRecorder records
+  WebM/Opus / MP4/AAC
+         │
+         └─POST /api/recitation/verify-audio ─▶
+                                              ├──POST /transcribe (audio)──▶
+                                              │                              ┌────────────┐
+                                              │                              │ faster-    │
+                                              │                              │ whisper    │
+                                              │                              │ (lang=ar)  │
+                                              │                              └────────────┘
+                                              │                                    │
+                                              │   { transcript, duration_sec } ◀───
+                                              ▼
+                                       normalize Arabic + Levenshtein
+                                       vs canonical Uthmani text
+         ◀── { score, status, transcript, source: "whisper" } ──
 ```
 
-**The model**: trained by Tarek Eldeeb on a two-stage corpus —
-7 professional reciters (full Quran) plus 18,420 filtered Tarteel community
-recordings. Achieves WER ≈ 9.9%, CER ≈ 6.6% on the held-out Quran test set.
-The TensorFlow Lite version (12 MB) is bundled in `asr_service/models/`.
+If the sidecar isn't reachable, the server responds **HTTP 503**, the
+client flips to fallback mode, and the next mic tap uses
+`webkitSpeechRecognition` instead. The scoring logic
+(`compareRecitation`) is shared by both paths — only the transcription
+source changes.
 
-**The fallback**: when the Python sidecar isn't reachable, the client
-automatically switches to the Web Speech API (browser-side Arabic STT
-on Chrome/Android and Safari/iOS). Same scoring logic, lower accuracy.
-Both paths share one `compareRecitation` function on the Node server.
+Mode is decided once on mount via `GET /api/recitation/asr-status`, so
+the user sees a "🤖 AI Quran Recognition" or "🎙 Voice Recognition
+(basic)" badge before recording.
 
 ---
 
@@ -116,66 +138,95 @@ Both paths share one `compareRecitation` function on the Node server.
 
 ### Prerequisites
 
-- **Node.js 18+** (for the API and client)
-- **Python 3.9** (for the AI sidecar — DeepSpeech wheels don't exist for newer Pythons)
-- **ffmpeg** (auto-installed by the Python Dockerfile; on bare-metal you'll need it)
-- npm 9+
+- **Node.js 18+** (API and client)
+- **Python 3.10, 3.11, or 3.12** (ASR sidecar)
+- **ffmpeg** on PATH (used by the sidecar to decode browser audio)
+- **npm 9+**
 
-### Option A — Docker compose (easiest, recommended)
+```bash
+# macOS
+brew install node python@3.11 ffmpeg
+
+# Ubuntu / Debian
+sudo apt install nodejs npm python3 python3-venv ffmpeg
+```
+
+### One command — everything
+
+```bash
+# Install once
+npm run install:all
+cd asr_service
+python3 -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt
+cd ..
+
+# Run everything (ASR + API + client) in one terminal
+npm run dev
+```
+
+You should see three colour-coded streams: **ASR**, **API**, **WEB**.
+Open <http://localhost:5173>. The API log line should say:
+
+```
+  ASR:         faster-whisper (small) @ http://localhost:5005
+```
+
+If it says **"not reachable"** instead, the Python sidecar isn't running
+— see *"Troubleshooting: ASR always falls back"* below.
+
+### Without the AI sidecar (fallback-only)
+
+If you don't want to set up Python, run the rest of the app and let the
+browser handle ASR:
+
+```bash
+npm run dev:basic     # API + client only, no ASR
+```
+
+The Recite question will use the browser's Web Speech API instead. The
+UI badge will show "🎙 Voice Recognition (basic)".
+
+### Docker compose (full stack in one command)
 
 ```bash
 docker compose up --build
 ```
 
-That builds two images and starts the full stack:
+That builds both images, starts the ASR service first (gated by a
+healthcheck), then the API+client image:
 
-- **API + client** at `http://localhost:4000`
-- **ASR sidecar** at `http://localhost:5005`
+- **API + client** at <http://localhost:4000>
+- **ASR sidecar** at <http://localhost:5005>
 
-Open `http://localhost:4000` on your phone or desktop browser.
+---
 
-### Option B — Bare metal (3 terminals)
+## Troubleshooting: ASR always falls back
 
-**Terminal 1** — Python ASR:
+If the UI badge says "🎙 Voice Recognition (basic)" instead of
+"🤖 AI Quran Recognition", one of three things is true:
 
-```bash
-cd asr_service
-python3.9 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python main.py
-# → http://localhost:5005
-```
+1. **The Python sidecar isn't running.**
+   - Run `curl http://localhost:5005/health`. You should get
+     `{"status":"ok","model_loaded":true,...}`.
+   - If you get connection refused: start the sidecar with
+     `npm run dev:asr` (or just `python asr_service/main.py`).
+   - Note: `npm run dev` already starts all three processes.
+     `npm run dev:basic` intentionally does not start the ASR.
 
-**Terminal 2** — Node API:
+2. **The model hasn't finished downloading yet.**
+   - First boot pulls the Whisper checkpoint from Hugging Face (a few
+     hundred MB for `small`, ~1.5 GB for `medium`). Watch the ASR log
+     stream until you see `Model ready.`
+   - Set `ASR_MODEL_SIZE=small` in `.env` to download faster while
+     developing.
 
-```bash
-npm run install:all
-npm run dev:server
-# → http://localhost:4000
-```
-
-**Terminal 3** — Vite dev server:
-
-```bash
-npm run dev:client
-# → http://localhost:5173
-```
-
-Open `http://localhost:5173` on a phone (same Wi-Fi → use your machine's
-IP) or desktop. The Vite dev server proxies `/api/*` to port 4000.
-
-### Option C — Bare metal (no Python, fallback only)
-
-If you don't want to install Python, just skip Terminal 1. The Node API
-will detect the absent sidecar and the Recite question will use the Web
-Speech API instead. Everything else works identically.
-
-```bash
-npm run install:all
-npm run dev
-# Visit http://localhost:5173
-```
+3. **The Node server can't reach the sidecar.**
+   - Check `ASR_URL` in `.env` — it should be `http://localhost:5005`
+     for bare-metal dev, or `http://asr:5005` inside docker-compose.
+   - Visit `GET http://localhost:4000/api/health` and look at the
+     `asr` block: `available: true, model_loaded: true` means the Node
+     API is talking to Python.
 
 ---
 
@@ -183,61 +234,43 @@ npm run dev
 
 ### Single VPS / Docker Compose
 
-The `docker-compose.yml` file is production-ready. Add real env vars for
-the Quran Foundation API and run:
-
-```bash
-docker compose up -d --build
-```
-
-Put nginx or Caddy in front for TLS. Persist `server/data/` to a volume.
+`docker-compose.yml` is production-ready. Set real env vars for the
+Quran Foundation API and run `docker compose up -d --build`. Put nginx
+or Caddy in front for TLS. Persist `server/data/` to a volume.
 
 ### Render / Railway / Fly.io
 
 These platforms support multi-service deploys:
 
-1. Deploy `asr_service/` as a Python service with the included Dockerfile.
-   Note its internal URL.
-2. Deploy the root as a Node service with the build command
-   `npm run install:all && npm run build` and start command `npm start`.
+1. Deploy `asr_service/` as a Python service using its Dockerfile.
+   Note the internal URL.
+2. Deploy the repo root as a Node service with build command
+   `npm run install:all && npm run build` and start `npm start`.
    Set `ASR_URL` to the Python service's URL.
 
 ### Without the AI sidecar
 
-Just deploy the root Node app. The recitation feature still works via the
-Web Speech API path. Drop or comment out the `asr` block in
-`docker-compose.yml`.
+Just deploy the Node app. Recitation falls back to Web Speech API
+automatically. Drop the `asr` block from `docker-compose.yml`.
 
 ---
 
 ## Configuration
 
-All environment variables are listed in `.env.example`. None are required
-for a basic demo.
+All env vars live in `.env.example`. None are required for a basic demo.
 
-| Variable           | Purpose                                                 |
-|--------------------|---------------------------------------------------------|
-| `QF_CLIENT_ID`     | Quran Foundation Content API credentials (optional)     |
-| `QF_CLIENT_SECRET` | (paired with above)                                     |
-| `QF_ENV`           | `prelive` or `production`                               |
-| `ASR_URL`          | Python sidecar URL (default `http://localhost:5005`)    |
-| `PORT`             | Node API port (default 4000)                            |
-| `VITE_API_URL`     | Where the client posts API calls (default: same origin) |
-
----
-
-## Adding more characters
-
-The character system auto-detects folders that follow the same naming
-scheme as `boy1`. To add a new character:
-
-1. Create `client/public/characters/<id>/`
-2. Drop in PNGs named `<id>_<emotion>.png`. Supported emotions:
-   `smile`, `happy`, `think`, `surprise`, `scared`, `star`, `football`,
-   `quran_reading`. (Missing emotions fall back to `smile`.)
-3. Add an entry to `client/src/lib/characters.js`.
-
-The user can switch characters anytime on the Profile page.
+| Variable           | Purpose                                                              |
+|--------------------|----------------------------------------------------------------------|
+| `QF_CLIENT_ID`     | Quran Foundation Content API credentials (optional)                  |
+| `QF_CLIENT_SECRET` | (paired with above)                                                  |
+| `QF_ENV`           | `prelive` or `production`                                            |
+| `GEMINI_API_KEY`   | Gemini key for the AI tutor + tafsir simplifier (optional)           |
+| `GEMINI_MODEL`     | Default `gemini-1.5-flash`                                           |
+| `FIREBASE_*`       | Firestore service-account creds (optional; JSON file used otherwise) |
+| `ASR_URL`          | Python sidecar URL (default `http://localhost:5005`)                 |
+| `ASR_MODEL_SIZE`   | Whisper checkpoint: `tiny` `base` `small` `medium` `large-v2/v3`     |
+| `PORT`             | Node API port (default 4000)                                         |
+| `VITE_API_URL`     | Where the client posts API calls (default: same origin)              |
 
 ---
 
@@ -276,19 +309,33 @@ stored in `localStorage`).
 
 ---
 
+## Adding more characters
+
+The character system auto-detects folders that follow the same naming
+scheme as `boy1`. To add a new character:
+
+1. Create `client/public/characters/<id>/`.
+2. Drop in PNGs named `<id>_<emotion>.png`. Supported emotions:
+   `smile`, `happy`, `think`, `surprise`, `scared`, `star`, `football`,
+   `quran_reading`. (Missing emotions fall back to `smile`.)
+3. Add an entry to `client/src/lib/characters.js`.
+
+The user can switch characters anytime on the Profile page.
+
+---
+
 ## Data accuracy & content notes
 
-The user emphasized that **a Quran app must be 100% correct**. Here is
-what's in the bundled dataset:
+A Quran app must be 100% correct. Here is what's in the bundled dataset:
 
 - **Arabic text (Uthmani script)** — matches the canonical text
   distributed by the Quran Foundation Content APIs.
 - **English translation** — Saheeh International translation.
 - **Audio recitation** — Mishary Rashid Alafasy, served from the
   EveryAyah CDN.
-- **Tafsir summaries** — short, child-friendly *paraphrases* written for
-  ages 8–14. **Please have a qualified scholar review these** before
-  publishing.
+- **Tafsir summaries** — short, child-friendly *paraphrases* written
+  for ages 8–14. **Please have a qualified scholar review these**
+  before publishing.
 - **Stories** — based on Quranic narratives; wording is original.
 
 ---
@@ -296,15 +343,16 @@ what's in the bundled dataset:
 ## Tech stack
 
 - **Frontend**: React 18, Vite 5, react-router-dom 6, TailwindCSS 3,
-  MediaRecorder + Web Speech API
-- **Backend**: Node 18+, Express 4
-- **AI sidecar**: Python 3.9, FastAPI, DeepSpeech 0.9.3 (TensorFlow Lite),
-  pydub + ffmpeg for audio decoding
-- **Recitation model**: DeepSpeech-Quran v2 (Imam + filtered Tarteel users),
-  WER ≈ 9.9% / CER ≈ 6.6%
-- **Fonts**: Nunito (UI), Amiri Quran / Noto Naskh Arabic (Quranic text)
+  MediaRecorder + Web Speech API.
+- **Backend**: Node 18+, Express 4.
+- **ASR sidecar**: Python 3.10+, FastAPI, faster-whisper (CTranslate2),
+  ffmpeg subprocess + soundfile for audio I/O.
+- **Recitation model**: OpenAI Whisper (Arabic, `small` default for dev,
+  configurable up to `large-v3` for production accuracy).
+- **Fonts**: Nunito (UI), Amiri Quran / Noto Naskh Arabic (Quranic text).
 
-No database (JSON file storage), no GPU required, no external paid services.
+No database (JSON file storage by default), no GPU required, no
+external paid services.
 
 ---
 
@@ -314,9 +362,6 @@ No database (JSON file storage), no GPU required, no external paid services.
 - **Quran text & translation**: distributed by the Quran Foundation; see
   <https://quran.foundation>.
 - **Recitation audio**: EveryAyah / Mishary Rashid Alafasy.
-- **DeepSpeech-Quran model**: Tarek Eldeeb,
-  <https://github.com/tarekeldeeb/DeepSpeech-Quran>, MPL-2.0.
-- **DeepSpeech engine**: Mozilla, MPL-2.0.
-- **Tarteel dataset**: used to train the v2 model
-  (<https://github.com/Tarteel-io>).
+- **Whisper**: OpenAI, MIT.
+- **faster-whisper**: SYSTRAN, <https://github.com/SYSTRAN/faster-whisper>, MIT.
 - App code in this repository is released under the MIT License.

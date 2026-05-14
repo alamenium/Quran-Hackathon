@@ -1,14 +1,24 @@
-# DeepSpeech 0.9.3 wheels are published for Python 3.5–3.9 on Linux, macOS,
-# and Windows (x86_64). Use Python 3.9 — it's the newest version that has
-# wheels on PyPI for the deepspeech runtime.
+# AyahQuest ASR — Python 3.10 / 3.11 / 3.12 / 3.13 compatible
 #
-# If you want CPU-only inference (default and recommended), use `deepspeech`.
-# For ARM (Raspberry Pi, Apple Silicon under Rosetta), use `deepspeech-tflite`
-# instead.
+# pydub was removed: it depends on `audioop`, which was dropped from the
+# Python stdlib in 3.13 (and never added to PyPy). Audio decoding is now
+# handled by shelling out to ffmpeg directly (subprocess) and reading the
+# resulting WAV with soundfile, which has no audioop dependency.
+#
+# System requirement: ffmpeg must be on PATH.
+#   macOS:  brew install ffmpeg
+#   Ubuntu: sudo apt install ffmpeg
 
-deepspeech==0.9.3
-fastapi==0.110.0
-uvicorn[standard]==0.29.0
-python-multipart==0.0.9
-pydub==0.25.1
-numpy>=1.19,<1.27
+# Core ASR engine — downloads Whisper weights from Hugging Face on first run.
+faster-whisper>=1.0.3
+
+# Audio I/O — reads/writes WAV/FLAC/OGG without audioop.
+soundfile>=0.12.1
+
+# Web framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+
+# Numerical
+numpy>=1.24

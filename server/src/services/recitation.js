@@ -1,20 +1,21 @@
 // Recitation verification.
 //
-// Two-mode operation:
+// Two-mode operation — the *scoring* logic is identical, only the
+// transcription source differs:
 //
-// 1. **AI mode** (preferred): the browser uploads recorded audio (WAV/WebM/
-//    OGG) to /api/recitation/verify-audio. The Node server forwards it to
-//    the Python DeepSpeech-Quran sidecar (asr_service/) which transcribes
-//    it to Arabic Quran text. We then compare the transcript to the
-//    canonical Arabic using normalization + Levenshtein similarity.
+//   AI mode  (preferred): browser → POST /api/recitation/verify-audio with
+//            raw audio bytes. The Node server forwards the audio to the
+//            faster-whisper Python sidecar in asr_service/, gets an Arabic
+//            transcript back, and scores it.
 //
-// 2. **Fallback mode**: the browser uses the Web Speech API to transcribe
-//    locally (works on Chrome Android, Safari iOS) and posts the transcript
-//    to /api/recitation/verify. We do the same comparison server-side. This
-//    path is automatically used when the ASR service is unreachable.
+//   Fallback: browser uses the Web Speech API locally, then POSTs the
+//            transcript to /api/recitation/verify. The server scores it.
+//            This path runs automatically when the ASR sidecar is down or
+//            still loading the model.
 //
-// Either way, the comparison logic is shared: strip Arabic diacritics,
-// unify alif/yaa/taa-marbuta forms, then score with Levenshtein distance.
+// Scoring: normalize Arabic (strip diacritics, unify alif/yaa/taa marbuta,
+// collapse whitespace), then Levenshtein-similarity against the canonical
+// Uthmani text.
 
 import { getVerse } from '../data/quranContent.js';
 

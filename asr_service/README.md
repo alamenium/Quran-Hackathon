@@ -1,80 +1,97 @@
-# AyahQuest ASR sidecar
+# ASR sidecar — runtime notes
 
-Python FastAPI service wrapping the DeepSpeech-Quran trained model
-(github.com/tarekeldeeb/DeepSpeech-Quran) so the Node API can request real
-Arabic Quran transcriptions.
+Project-level docs live in the **root [`README.md`](../README.md)** —
+architecture, how the recitation check works, npm scripts, troubleshooting.
 
-The trained model was built in two stages by Tarek Eldeeb:
+This file only documents knobs specific to running this Python service
+directly. If you're using `npm run dev` from the repo root you can
+skip it.
 
-1. **Imam-only**: trained on 7 professional reciters covering the full Quran
-   (~43k recordings). Achieves WER 5.7% / CER 4.0% on the held-out set.
-2. **Imam + filtered Tarteel users**: same Imam corpus + 18,420 community
-   recordings (filtered from 25k by acoustic acceptance threshold ≥ 0.15).
-   Achieves WER 9.9% / CER 6.6%.
+---
 
-Bundled here is the version 2 model (Imam + filtered users), exported to
-TensorFlow Lite for fast CPU inference.
+## What this service is
 
-## Files
+A FastAPI app wrapping [faster-whisper](https://github.com/SYSTRAN/faster-whisper)
+(CTranslate2 reimplementation of Whisper). It downloads the chosen Whisper
+checkpoint from Hugging Face on first boot and caches it under
+`~/.cache/huggingface/`. There are **no model files committed in this
+repo** — the `models/` directory still exists but is unused (kept for the
+legacy DeepSpeech era and can be deleted).
 
+## HTTP API
+
+| Method | Path          | Description                                       |
+|--------|---------------|---------------------------------------------------|
+| GET    | `/health`     | Service status; `model_loaded: true` when ready   |
+| POST   | `/transcribe` | multipart `audio` upload → `{ transcript, ... }`  |
+
+`GET /health` response:
+
+```json
+{
+  "status": "ok",
+  "model_loaded": true,
+  "model_path": "faster-whisper/small",
+  "sample_rate": 16000
+}
 ```
-asr_service/
-├── main.py              # FastAPI app
-├── requirements.txt     # Python deps
-├── Dockerfile           # Container image
-└── models/
-    ├── quran.tflite     # Acoustic model (12 MB)
-    ├── quran.scorer     # KenLM language model (1.7 MB)
-    └── alphabet.txt     # Quran alphabet with tashkeel
-```
 
-## API
+`POST /transcribe` accepts any container ffmpeg understands (WebM/Opus
+from Chrome, OGG/Opus from Firefox, MP4/AAC from Safari, WAV).
+ffmpeg + soundfile resample to 16 kHz / 16-bit / mono before inference.
 
-| Method | Path           | Description                                       |
-|--------|----------------|---------------------------------------------------|
-| GET    | `/health`      | Service status; `model_loaded: true` when ready   |
-| POST   | `/transcribe`  | multipart `audio` upload → `{ transcript, ... }` |
+## Environment variables
 
-The `/transcribe` endpoint accepts any audio container `ffmpeg` understands
-(WebM/Opus from Chrome, OGG/Opus from Firefox, MP4/AAC from Safari, plain
-WAV). It internally resamples to 16 kHz / 16-bit / mono before calling the
-model.
+| Variable          | Default | Description                                                              |
+|-------------------|---------|--------------------------------------------------------------------------|
+| `PORT`            | `5005`  | HTTP port                                                                |
+| `ASR_MODEL_SIZE`  | `small` | `tiny` `base` `small` `medium` `large-v2` `large-v3`                     |
+| `ASR_DEVICE`      | `cpu`   | `cpu` or `cuda`                                                          |
+| `ASR_COMPUTE_TYPE`| `int8`  | `int8` (fast CPU) · `float32` (precise CPU) · `float16` (CUDA)           |
 
-## Run locally
+Use `ASR_MODEL_SIZE=small` (or `tiny`) for fast first-boot during dev;
+`medium` is the recommended production value for Quranic Arabic.
+
+## Run it directly
+
+Prerequisites: Python 3.10 / 3.11 / 3.12 and ffmpeg on PATH
+(`brew install ffmpeg` or `sudo apt install ffmpeg`).
 
 ```bash
-cd asr_service
-python3.9 -m venv .venv
-source .venv/bin/activate
+python3 -m venv .venv
+. .venv/bin/activate
 pip install -r requirements.txt
 python main.py
 # → http://localhost:5005
 ```
 
-## Run with Docker
+The service logs `Model ready.` once the Whisper weights are cached.
+Subsequent starts are instant. From the repo root the same thing happens
+via `npm run dev:asr`, which is what `npm run dev` invokes automatically.
+
+## Run it with Docker
 
 ```bash
 docker build -t ayahquest-asr .
 docker run -p 5005:5005 ayahquest-asr
 ```
 
-## Why DeepSpeech 0.9.3 (and not something newer)
+Persist the model cache across container restarts:
 
-Mozilla DeepSpeech was archived in 2020 and never got Python 3.10+ wheels.
-The DeepSpeech-Quran model in this repo was trained against the 0.9.3 API,
-so we pin to that. The 0.9.3 wheels still install cleanly on Linux/macOS x86
-under Python 3.6–3.9.
+```bash
+docker run -p 5005:5005 \
+  -v ~/.cache/huggingface:/root/.cache/huggingface \
+  ayahquest-asr
+```
 
-If you want to upgrade to a newer ASR engine (Coqui STT, Whisper, etc.)
-later, only `main.py` needs to change — the HTTP shape stays the same so
-the Node service won't notice.
+## Performance notes
 
-## Production notes
-
-- The model is CPU-only. On a modern x86 server, transcription of a
-  3-second ayah takes under 200ms. GPU acceleration is **not** needed.
-- The first request after boot pays a one-time ~500ms model load cost; the
-  service warms up in `@app.on_event("startup")` so this happens at boot,
-  not on user request.
-- `/transcribe` enforces a 60s upload limit; tune via the constant in
-  `main.py` if you need longer ayat.
+- On a modern x86 or Apple Silicon CPU, transcription of a 3-second
+  ayah takes ~200–500 ms with `medium` / `int8`. `small` is roughly
+  2× faster with a noticeable accuracy cost on long ayat.
+- The model is warmed up in the FastAPI `startup` handler, so the first
+  user request after boot doesn't pay the load cost.
+- GPU is optional. Set `ASR_DEVICE=cuda` and `ASR_COMPUTE_TYPE=float16`
+  on a CUDA machine.
+- `/transcribe` enforces a 60-second upload limit; tune it in `main.py`
+  if you need longer recordings.

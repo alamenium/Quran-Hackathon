@@ -11,6 +11,6 @@ server/data/cache/
 .vercel
 .netlify
 coverage/
-recitation-service/.venv/
-recitation-service/__pycache__/
+asr_service/.venv/
+asr_service/__pycache__/
 *.pyc

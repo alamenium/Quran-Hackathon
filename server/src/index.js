@@ -15,6 +15,7 @@ import progressRouter from './routes/progress.js';
 import storiesRouter from './routes/stories.js';
 import diagnosticRouter from './routes/diagnostic.js';
 import aiRouter from './routes/ai.js';
+import classesRouter from './routes/classes.js';
 import { asrHealth } from './services/recitation.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -53,6 +54,7 @@ app.use('/api/progress', progressRouter);
 app.use('/api/stories', storiesRouter);
 app.use('/api/diagnostic', diagnosticRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/classes', classesRouter);
 
 // Serve client build in production (single-deploy mode)
 const clientDist = path.resolve(__dirname, '../../client/dist');
@@ -80,5 +82,15 @@ app.listen(PORT, async () => {
   console.log(`  Listening on http://localhost:${PORT}`);
   console.log(`  Health:      http://localhost:${PORT}/api/health`);
   console.log(`  Quran API:   ${process.env.QF_CLIENT_ID ? 'Quran Foundation (live)' : 'Offline dataset (no credentials)'}`);
-  console.log(`  ASR:         ${asr.available && asr.model_loaded ? `DeepSpeech-Quran @ ${process.env.ASR_URL || 'http://localhost:5005'}` : 'Not running (Web Speech API fallback only)'}\n`);
+  const asrUrl = process.env.ASR_URL || 'http://localhost:5005';
+  if (asr.available && asr.model_loaded) {
+    console.log(
+      `  ASR:         faster-whisper (${asr.model_path || 'unknown'}) @ ${asrUrl}`
+    );
+  } else {
+    console.log(`  ASR:         not reachable at ${asrUrl}`);
+    console.log(`               → recitation falls back to the Web Speech API.`);
+    console.log(`               → start the sidecar with:  npm run dev:asr`);
+  }
+  console.log('');
 });

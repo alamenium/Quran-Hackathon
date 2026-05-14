@@ -36,15 +36,15 @@ router.post('/verify', (req, res) => {
   res.json({ ...result, source: 'web-speech' });
 });
 
-// --- Audio-based verification (DeepSpeech-Quran path) ----------------------
+// --- Audio-based verification (faster-whisper AI path) ---------------------
 //
 // Accepts raw audio bytes in the request body. The client sends:
 //   Content-Type: audio/webm  (or audio/wav, audio/ogg, etc.)
 //   X-Verse-Key:  1:1
 //
 // We forward to the Python ASR sidecar, get an Arabic transcript back, then
-// score it against the canonical Arabic. Falls back gracefully (HTTP 503)
-// if the sidecar is unreachable so the client can switch to /verify.
+// score it against the canonical Arabic. Returns HTTP 503 when the sidecar
+// is unreachable so the client can fall back to the /verify (Web Speech) path.
 
 const rawAudio = express.raw({
   type: ['audio/*', 'application/octet-stream'],
@@ -67,11 +67,15 @@ router.post('/verify-audio', rawAudio, async (req, res, next) => {
       return res.status(503).json({
         error: 'ASR service not available',
         hint:
-          'The DeepSpeech-Quran sidecar is not running. Start it with `cd asr_service && python main.py`, or use POST /verify with a Web Speech API transcript.',
+          'The faster-whisper sidecar at ' +
+          (process.env.ASR_URL || 'http://localhost:5005') +
+          ' is not running or still loading the model. ' +
+          'Start it with `npm run dev:asr` (or `python asr_service/main.py`), ' +
+          'or POST a transcript to /api/recitation/verify instead.',
       });
     }
 
-    // Pick a sane filename so pydub picks the right decoder.
+    // Pick a sane filename so ffmpeg picks the right demuxer.
     const ct = (req.header('content-type') || '').toLowerCase();
     const filename = ct.includes('webm')
       ? 'rec.webm'
@@ -88,7 +92,7 @@ router.post('/verify-audio', rawAudio, async (req, res, next) => {
 
     res.json({
       ...result,
-      source: 'deepspeech-quran',
+      source: 'whisper',
       asr: {
         sample_rate: asr.sample_rate,
         duration_sec: asr.duration_sec,

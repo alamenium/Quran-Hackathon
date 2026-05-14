@@ -1,7 +1,7 @@
 // MediaRecorder-based audio capture.
 //
 // Records short audio clips from the user's microphone for upload to the
-// DeepSpeech-Quran ASR sidecar. The browser picks the encoding (Chrome →
+// faster-whisper ASR sidecar. The browser picks the encoding (Chrome →
 // WebM/Opus, Firefox → OGG/Opus, Safari → MP4/AAC); the Python service
 // uses ffmpeg to decode whatever it receives.
 //
