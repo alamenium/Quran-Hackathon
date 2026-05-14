@@ -10,8 +10,8 @@
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyDrgKydbKRJxg8turcNVqoVMCodIGJ7TIg';
 const GEMINI_MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
 const GEMINI_BASE = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+// Gemini AI service.
 
-// Shared safety settings — block anything harmful.
 const SAFETY = [
   { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
   { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_MEDIUM_AND_ABOVE' },
@@ -23,10 +23,14 @@ function configured() {
   return Boolean(GEMINI_API_KEY);
 }
 
+function toGeminiRole(role) {
+  if (role === 'assistant' || role === 'model') return 'model';
+  return 'user';
+}
+
 async function callGemini(systemInstruction, userText, maxTokens = 512) {
-  if (!configured()) {
-    return null; // caller handles fallback
-  }
+  if (!configured()) return null;
+
   const body = {
     systemInstruction: { parts: [{ text: systemInstruction }] },
     contents: [{ role: 'user', parts: [{ text: userText }] }],
@@ -36,24 +40,32 @@ async function callGemini(systemInstruction, userText, maxTokens = 512) {
       temperature: 0.3,
     },
   };
+
   const res = await fetch(`${GEMINI_BASE}?key=${GEMINI_API_KEY}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(20_000),
   });
+
   if (!res.ok) {
     const text = await res.text();
+    console.error('[Gemini API error]', res.status, text);
     throw new Error(`Gemini API ${res.status}: ${text}`);
   }
+
   const data = await res.json();
   return data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() || '';
 }
 
-// ---------------------------------------------------------------------------
-// 1. Simplify tafsir to child-friendly language.
-// ---------------------------------------------------------------------------
-export async function simplifyTafsir({ verseKey, verseText, translation, tafsirText, targetAge = 12, source = 'Ibn Kathir' }) {
+export async function simplifyTafsir({
+                                       verseKey,
+                                       verseText,
+                                       translation,
+                                       tafsirText,
+                                       targetAge = 12,
+                                       source = 'Ibn Kathir',
+                                     }) {
   const system = `You are an Islamic educational assistant for children.
 Your ONLY job is to rewrite the provided tafsir text at a child-friendly level (age ${targetAge}).
 Rules you must follow without exception:
@@ -70,13 +82,16 @@ Tafsir source text: """${tafsirText}"""
 Please simplify this tafsir for a child aged ${targetAge}.`;
 
   const result = await callGemini(system, user, 300);
-  return result ?? `${tafsirText.slice(0, 200)}… (Simplified from ${source})`;
+  return result ?? `${String(tafsirText || '').slice(0, 200)}… (Simplified from ${source})`;
 }
 
-// ---------------------------------------------------------------------------
-// 2. Generate quiz questions from lesson content.
-// ---------------------------------------------------------------------------
-export async function generateQuiz({ verseKey, verseText, translation, simpleTafsir, words }) {
+export async function generateQuiz({
+                                     verseKey,
+                                     verseText,
+                                     translation,
+                                     simpleTafsir,
+                                     words,
+                                   }) {
   const system = `You are an Islamic education quiz generator for children.
 Generate exactly 3 multiple-choice questions based ONLY on the provided ayah, translation, and explanation.
 Rules:
@@ -87,7 +102,10 @@ Rules:
 - Output valid JSON only: { "questions": [ { "prompt": "...", "options": ["A","B","C","D"], "correctIndex": 0, "hint": "..." } ] }
 - No markdown fences, no preamble.`;
 
-  const wordList = (words || []).map(w => `${w.arabic} = ${w.meaning}`).join(', ');
+  const wordList = (words || [])
+      .map((w) => `${w.arabic} = ${w.meaning}`)
+      .join(', ');
+
   const user = `Ayah ${verseKey}: "${verseText}"
 Translation: "${translation}"
 Explanation: "${simpleTafsir}"
@@ -95,17 +113,15 @@ Key words: ${wordList}`;
 
   const raw = await callGemini(system, user, 600);
   if (!raw) return null;
+
   try {
     const clean = raw.replace(/```json|```/g, '').trim();
     return JSON.parse(clean);
-  } catch {
+  } catch (err) {
+    console.error('[Gemini quiz JSON parse error]', err, raw);
     return null;
   }
 }
-
-// ---------------------------------------------------------------------------
-// 3. AI Tutor — safe, source-grounded, fatwa-refusing.
-// ---------------------------------------------------------------------------
 
 const TUTOR_SYSTEM = `You are a safe, kind Islamic learning assistant for children and teens.
 You help users understand Quran lessons, Arabic words, and Islamic stories.
@@ -120,22 +136,38 @@ STRICT RULES — you must follow these without exception:
 7. Keep answers short (2–4 sentences), warm, and age-appropriate.
 8. Always cite the source when you use tafsir content (e.g., "According to the lesson explanation based on Ibn Kathir...").`;
 
-export async function tutorAnswer({ userMessage, lessonContext, conversationHistory = [] }) {
+export async function tutorAnswer({
+                                    userMessage,
+                                    lessonContext,
+                                    conversationHistory = [],
+                                  }) {
   if (!configured()) {
     return {
-      text: "The AI tutor is not available right now. Please ask your teacher for help with this question.",
+      text: 'The AI tutor is not available right now. Please ask your teacher for help with this question.',
       refused: false,
     };
   }
 
-  // Detect fatwa-style questions before sending to Gemini.
+  const msg = String(userMessage || '').trim();
+
   const fatwaTriggers = [
-    'is it haram', 'is it halal', 'is it allowed', 'is it permitted',
-    'fatwa', 'ruling on', 'what is the ruling', 'can i', 'am i allowed',
-    'is this sin', 'is this a sin', 'permissible',
+    'is it haram',
+    'is it halal',
+    'is it allowed',
+    'is it permitted',
+    'fatwa',
+    'ruling on',
+    'what is the ruling',
+    'can i',
+    'am i allowed',
+    'is this sin',
+    'is this a sin',
+    'permissible',
   ];
-  const lower = userMessage.toLowerCase();
-  if (fatwaTriggers.some(t => lower.includes(t))) {
+
+  const lower = msg.toLowerCase();
+
+  if (fatwaTriggers.some((t) => lower.includes(t))) {
     return {
       text: "That's a question about Islamic rulings (fatwa), and I'm not qualified to answer it. For questions like this, please ask a qualified Islamic scholar or a trusted teacher.",
       refused: true,
@@ -143,21 +175,33 @@ export async function tutorAnswer({ userMessage, lessonContext, conversationHist
   }
 
   const contextBlock = lessonContext
-    ? `Current lesson context:\n${JSON.stringify(lessonContext, null, 2)}`
-    : 'No specific lesson context provided.';
+      ? `Current lesson context:\n${JSON.stringify(lessonContext, null, 2)}`
+      : 'No specific lesson context provided.';
 
-  // Build conversation history for Gemini multi-turn.
   const contents = [];
-  for (const turn of conversationHistory.slice(-6)) { // last 6 turns only
-    contents.push({ role: turn.role, parts: [{ text: turn.text }] });
+
+  for (const turn of conversationHistory.slice(-6)) {
+    if (!turn?.text) continue;
+
+    contents.push({
+      role: toGeminiRole(turn.role),
+      parts: [{ text: String(turn.text) }],
+    });
   }
-  contents.push({ role: 'user', parts: [{ text: `${contextBlock}\n\nStudent question: ${userMessage}` }] });
+
+  contents.push({
+    role: 'user',
+    parts: [{ text: `${contextBlock}\n\nStudent question: ${msg}` }],
+  });
 
   const body = {
     systemInstruction: { parts: [{ text: TUTOR_SYSTEM }] },
     contents,
     safetySettings: SAFETY,
-    generationConfig: { maxOutputTokens: 300, temperature: 0.2 },
+    generationConfig: {
+      maxOutputTokens: 300,
+      temperature: 0.2,
+    },
   };
 
   const res = await fetch(`${GEMINI_BASE}?key=${GEMINI_API_KEY}`, {
@@ -167,18 +211,27 @@ export async function tutorAnswer({ userMessage, lessonContext, conversationHist
     signal: AbortSignal.timeout(20_000),
   });
 
-  if (!res.ok) throw new Error(`Gemini tutor ${res.status}`);
+  if (!res.ok) {
+    const text = await res.text();
+    console.error('[Gemini tutor error]', res.status, text);
+    throw new Error(`Gemini tutor ${res.status}: ${text}`);
+  }
+
   const data = await res.json();
-  const text = data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
-    || "I'm not sure about that. Please ask your teacher for help.";
+
+  const text =
+      data?.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ||
+      "I'm not sure about that. Please ask your teacher for help.";
 
   return { text, refused: false };
 }
 
-// ---------------------------------------------------------------------------
-// 4. Lesson completion summary.
-// ---------------------------------------------------------------------------
-export async function lessonSummary({ verseKey, theme, wordsLearned, reflectionText }) {
+export async function lessonSummary({
+                                      verseKey,
+                                      theme,
+                                      wordsLearned,
+                                      reflectionText,
+                                    }) {
   const system = `You are a warm Islamic learning companion for children.
 Write a short, encouraging 2-sentence lesson completion message.
 Rules:
@@ -193,7 +246,17 @@ They learned these words: ${(wordsLearned || []).join(', ')}.
 Their reflection: "${reflectionText || 'not provided'}"`;
 
   const result = await callGemini(system, user, 150);
-  return result ?? `You spent time with the Quran today learning about ${theme}. That is something worth continuing — see you tomorrow, in sha Allah.`;
+
+  return (
+      result ??
+      `You spent time with the Quran today learning about ${theme}. That is something worth continuing — see you tomorrow, in sha Allah.`
+  );
 }
 
-export const gemini = { configured, simplifyTafsir, generateQuiz, tutorAnswer, lessonSummary };
+export const gemini = {
+  configured,
+  simplifyTafsir,
+  generateQuiz,
+  tutorAnswer,
+  lessonSummary,
+};
