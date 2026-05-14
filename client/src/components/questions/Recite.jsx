@@ -1,105 +1,99 @@
-// "Recite the ayah" question.
+// "Recite the ayah" question — live-caption flow.
 //
-// Decides up front which transcription path to expose:
+// Behaviour:
+//   1. Mic auto-starts on mount (no record button).
+//   2. As the user recites, large Arabic captions appear in real time
+//      (Web Speech API → interim + final results).
+//   3. When the user stops talking, the browser fires `onend`. We then
+//      automatically POST the transcript to /api/recitation/verify and
+//      show the score. No "Check" button, no audio playback.
+//   4. After the score, a single "Next" button advances. A small
+//      "Restart" link lets the user redo the ayah.
 //
-//   AI mode       — sidecar is reachable AND model is loaded AND the
-//                   browser can record audio (MediaRecorder).
-//                   → record audio, POST to /api/recitation/verify-audio
-//                     (the Node server forwards to faster-whisper).
-//
-//   Fallback mode — anything else, as long as the browser supports
-//                   webkitSpeechRecognition.
-//                   → live-transcribe in the browser, POST the transcript
-//                     to /api/recitation/verify.
-//
-// If the AI sidecar dies mid-request (HTTP 503), we degrade gracefully:
-// flip into fallback mode and ask the user to tap the mic again.
-//
-// On browsers that support neither (rare) we show a friendly skip so a
-// child is never blocked.
+// Browsers without Web Speech support (Firefox desktop today) fall back
+// to a friendly skip — there's no MediaRecorder/Whisper UI in this view
+// any more, by design.
 
-import { useEffect, useState } from 'react';
-import { useAudioRecorder } from '../../hooks/useAudioRecorder.js';
+import { useEffect, useRef, useState } from 'react';
 import { useSpeechRecognition } from '../../hooks/useSpeechRecognition.js';
 import { VerseCard } from '../VerseCard.jsx';
 import { api } from '../../lib/api.js';
 
 export function Recite({ question, onAnswer, locked }) {
   const verse = question.verse;
-  const recorder = useAudioRecorder();
   const speech = useSpeechRecognition({ lang: 'ar-SA' });
 
-  const [asrUp, setAsrUp] = useState(null); // null=unknown, true/false
   const [verifying, setVerifying] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
-  const [usedFallback, setUsedFallback] = useState(false);
+  const [autoStartFailed, setAutoStartFailed] = useState(false);
 
-  // Probe the AI sidecar once on mount so we can show the right UI.
+  // Track whether we've already submitted this run so we don't double-fire
+  // when React re-renders after onend.
+  const submittedRef = useRef(false);
+
+  // ---- Auto-start on mount -----------------------------------------------
   useEffect(() => {
-    let cancelled = false;
-    api
-      .asrStatus()
-      .then((s) => !cancelled && setAsrUp(!!(s.available && s.model_loaded)))
-      .catch(() => !cancelled && setAsrUp(false));
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!speech.supported || locked) return;
+    submittedRef.current = false;
+    try {
+      speech.start();
+    } catch {
+      setAutoStartFailed(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [verse?.verse_key]);
 
-  const aiMode = asrUp && recorder.supported;
-  const fallbackMode = (!aiMode || usedFallback) && speech.supported;
+  // ---- Auto-submit when speech ends with a transcript ---------------------
+  useEffect(() => {
+    if (
+      !speech.listening &&
+      speech.transcript &&
+      !submittedRef.current &&
+      !verifying &&
+      !result
+    ) {
+      submittedRef.current = true;
+      verify(speech.transcript);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [speech.listening, speech.transcript]);
 
-  const verify = async () => {
+  const verify = async (transcriptText) => {
     setError(null);
     setVerifying(true);
     try {
-      let res;
-      if (aiMode && !usedFallback && recorder.blob) {
-        try {
-          res = await api.verifyRecitationAudio(verse.verse_key, recorder.blob);
-        } catch (err) {
-          // Sidecar disappeared between probe and verify — flip into
-          // fallback mode and ask the user to retry with the simple mic.
-          if (err.status === 503) {
-            setUsedFallback(true);
-            setAsrUp(false);
-            recorder.reset();
-            setError(
-              "The AI engine isn't reachable. Tap the mic again — we'll use simple voice mode."
-            );
-            return;
-          }
-          throw err;
-        }
-      } else if (fallbackMode && speech.transcript) {
-        res = await api.verifyRecitation(verse.verse_key, speech.transcript);
-      } else {
-        setError(
-          aiMode
-            ? 'Please record yourself reciting first.'
-            : 'Please tap the mic and recite the ayah first.'
-        );
-        return;
-      }
+      const res = await api.verifyRecitation(verse.verse_key, transcriptText);
       setResult(res);
     } catch (err) {
       setError(err.message || 'Verification failed');
+      submittedRef.current = false;
     } finally {
       setVerifying(false);
     }
   };
 
+  const restart = () => {
+    setResult(null);
+    setError(null);
+    submittedRef.current = false;
+    speech.reset();
+    try {
+      speech.start();
+    } catch {
+      setAutoStartFailed(true);
+    }
+  };
+
   const accept = () => {
     if (locked) return;
-    const score = result?.score ?? 0;
     onAnswer({
-      correct: score >= 65,
+      correct: !!result?.passed,
       recitation: {
         verse_key: verse.verse_key,
-        score,
+        passed: !!result?.passed,
+        words: result?.words || [],
         transcript: result?.transcript,
-        source: result?.source,
       },
       pickedText: result?.transcript,
       correctText: verse.text_uthmani,
@@ -111,12 +105,7 @@ export function Recite({ question, onAnswer, locked }) {
     onAnswer({ correct: true, noFeedback: true, skipped: true });
   };
 
-  const resetAll = () => {
-    recorder.reset();
-    speech.reset();
-    setResult(null);
-    setError(null);
-  };
+  // ---- Render -----------------------------------------------------------
 
   return (
     <div className="flex flex-col gap-5">
@@ -124,210 +113,203 @@ export function Recite({ question, onAnswer, locked }) {
 
       <VerseCard verse={verse} />
 
-      {/* Mode badge */}
-      <div className="flex items-center justify-center">
-        <span
-          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-extrabold uppercase tracking-wide ${
-            aiMode
-              ? 'bg-brand-500/10 text-brand-500'
-              : fallbackMode
-              ? 'bg-accent-blue/10 text-accent-blue'
-              : 'bg-accent-orange/10 text-accent-orange'
-          }`}
-        >
-          {asrUp === null ? (
-            <>⚙ checking…</>
-          ) : aiMode ? (
-            <>🤖 AI Quran Recognition</>
-          ) : fallbackMode ? (
-            <>🎙 Voice Recognition (basic)</>
-          ) : (
-            <>⚠ Voice not supported on this browser</>
-          )}
-        </span>
-      </div>
+      <ModeBadge speech={speech} verifying={verifying} result={result} />
 
-      {/* AI / recorder UI */}
-      {aiMode && (
-        <RecorderUI
-          recorder={recorder}
-          locked={locked || verifying}
-          onReset={resetAll}
-        />
+      {speech.supported ? (
+        <LiveTranscript speech={speech} verifying={verifying} result={result} />
+      ) : (
+        <div className="text-sm text-ink-soft text-center bg-paper border-2 border-gray-100 rounded-2xl p-4">
+          Live voice recognition isn't available on this browser.
+          Try Chrome on Android or Safari on iOS, or tap Skip to continue.
+        </div>
       )}
 
-      {/* Web Speech fallback UI */}
-      {!aiMode && fallbackMode && (
-        <SpeechUI speech={speech} locked={locked || verifying} />
+      {autoStartFailed && (
+        <div className="text-sm text-accent-orange bg-accent-orange/10 border-2 border-accent-orange/30 rounded-2xl p-3">
+          The mic didn't start automatically. Tap "Start listening" below.
+          <button
+            type="button"
+            onClick={restart}
+            className="ml-2 underline font-bold"
+          >
+            Start listening
+          </button>
+        </div>
       )}
 
       {error && (
         <div className="text-sm text-accent-pink bg-accent-pink/10 border-2 border-accent-pink/30 rounded-2xl p-3">
           {error}
+          <button
+            type="button"
+            onClick={restart}
+            className="ml-2 underline font-bold"
+          >
+            Try again
+          </button>
         </div>
       )}
 
-      {result && (
-        <ResultPanel result={result} usedFallback={usedFallback} />
-      )}
+      {result && <ResultPanel result={result} />}
 
       <div className="grid grid-cols-2 gap-2 w-full">
-        <button
-          type="button"
-          onClick={result ? accept : verify}
-          disabled={
-            locked ||
-            verifying ||
-            (!result && !recorder.blob && !speech.transcript)
-          }
-          className="duo-btn-primary"
-        >
-          {verifying
-            ? 'Checking…'
-            : result
-            ? 'Continue'
-            : 'Check My Recitation'}
-        </button>
-        <button
-          type="button"
-          onClick={skip}
-          disabled={locked}
-          className="duo-btn-ghost"
-        >
-          Skip
-        </button>
+        {result ? (
+          <>
+            <button
+              type="button"
+              onClick={accept}
+              disabled={locked}
+              className="duo-btn-primary"
+            >
+              Continue
+            </button>
+            <button
+              type="button"
+              onClick={restart}
+              disabled={locked}
+              className="duo-btn-ghost"
+            >
+              Try again
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={skip}
+            disabled={locked}
+            className="duo-btn-ghost col-span-2"
+          >
+            Skip
+          </button>
+        )}
       </div>
-
-      {!aiMode && !fallbackMode && (
-        <div className="text-xs text-ink-soft text-center">
-          Voice recognition isn't available on this browser. You can listen to
-          the audio above and tap Skip when you're ready to continue.
-        </div>
-      )}
     </div>
   );
 }
 
-// --- Sub-components --------------------------------------------------------
+// ---------------------------------------------------------------------------
 
-function RecorderUI({ recorder, locked, onReset }) {
+function ModeBadge({ speech, verifying, result }) {
+  const label = !speech.supported
+    ? '⚠ Voice not supported on this browser'
+    : verifying
+    ? '⚙ Checking your recitation…'
+    : result
+    ? '✅ Done — see your score below'
+    : speech.listening
+    ? '🎙 Listening… recite the ayah'
+    : '⏸ Paused';
+  const colour = !speech.supported
+    ? 'bg-accent-orange/10 text-accent-orange'
+    : speech.listening
+    ? 'bg-accent-blue/10 text-accent-blue animate-pulse-soft'
+    : result
+    ? 'bg-brand-500/10 text-brand-500'
+    : 'bg-gray-100 text-ink-soft';
   return (
-    <div className="flex flex-col items-center gap-3">
-      <button
-        type="button"
-        onClick={recorder.recording ? recorder.stop : recorder.start}
-        disabled={locked}
-        className={`duo-btn ${recorder.recording ? 'animate-pulse-soft' : ''}`}
-        style={{
-          background: recorder.recording ? '#FF4B4B' : '#1CB0F6',
-          width: 96,
-          height: 96,
-          borderRadius: '999px',
-          fontSize: 36,
-        }}
-        aria-label={recorder.recording ? 'Stop recording' : 'Start recording'}
+    <div className="flex justify-center">
+      <span
+        className={`inline-flex px-3 py-1.5 rounded-full text-xs font-extrabold uppercase tracking-wide ${colour}`}
       >
-        {recorder.recording ? '■' : '🎤'}
-      </button>
-      <div className="text-sm text-ink-soft text-center">
-        {recorder.recording
-          ? `Listening… ${recorder.duration.toFixed(1)}s`
-          : recorder.blob
-          ? 'Got it! Tap Check below — or the mic to record again.'
-          : 'Tap the mic and recite the ayah'}
-      </div>
-      {recorder.blob && !recorder.recording && (
-        <audio
-          src={URL.createObjectURL(recorder.blob)}
-          controls
-          className="w-full max-w-xs"
-        />
-      )}
-      {recorder.error && (
-        <div className="text-sm text-accent-pink">{recorder.error}</div>
-      )}
-      {recorder.blob && !recorder.recording && (
-        <button
-          type="button"
-          onClick={onReset}
-          className="text-xs text-ink-soft underline"
+        {label}
+      </span>
+    </div>
+  );
+}
+
+function LiveTranscript({ speech, verifying, result }) {
+  // Hide the live caption box once we have a result — the result panel
+  // shows the final transcript on its own.
+  if (result) return null;
+
+  const hasAnything = speech.transcript || speech.interim;
+  return (
+    <div className="bg-paper border-2 border-gray-100 rounded-2xl p-4 min-h-[120px] flex items-center justify-center">
+      {hasAnything ? (
+        <div
+          className="font-arabic text-3xl text-ink leading-loose text-center"
+          dir="rtl"
         >
-          Discard and try again
-        </button>
+          {speech.transcript}{' '}
+          <span className="text-ink-faint">{speech.interim}</span>
+        </div>
+      ) : verifying ? (
+        <div className="text-ink-soft text-sm">Checking…</div>
+      ) : speech.listening ? (
+        <div className="text-ink-faint text-sm">
+          Start reciting — your words appear here in real time.
+        </div>
+      ) : (
+        <div className="text-ink-faint text-sm">Getting the mic ready…</div>
       )}
     </div>
   );
 }
 
-function SpeechUI({ speech, locked }) {
+// Render the canonical Quranic text (with full diacritization) word by word,
+// colouring each word based on the comparison result:
+//
+//   match              — normal ink colour (the user said this word right,
+//                        ignoring missing diacritics).
+//   wrong-letters      — red    (different word entirely).
+//   wrong-diacritics   — red    (right letters, wrong harakat).
+//   missing            — grey   (user skipped this word).
+//
+// We always show the canonical's spelling, so dagger alif (ـٰ) and alef
+// wasla (ٱ) appear exactly as in the Mushaf even if the user spoke a
+// plain alif.
+function ResultPanel({ result }) {
+  const words = Array.isArray(result?.words) ? result.words : [];
   return (
-    <div className="flex flex-col items-center gap-3">
-      <button
-        type="button"
-        onClick={speech.listening ? speech.stop : speech.start}
-        disabled={locked}
-        className={`duo-btn ${speech.listening ? 'animate-pulse-soft' : ''}`}
-        style={{
-          background: speech.listening ? '#FF4B4B' : '#1CB0F6',
-          width: 96,
-          height: 96,
-          borderRadius: '999px',
-          fontSize: 36,
-        }}
-        aria-label={speech.listening ? 'Stop' : 'Start'}
+    <div
+      className={`w-full bg-cream border-2 rounded-2xl p-4 flex flex-col gap-3 ${
+        result.passed ? 'border-brand-500/40' : 'border-accent-gold/40'
+      }`}
+    >
+      <div
+        className="font-arabic text-3xl text-ink leading-loose text-right"
+        dir="rtl"
       >
-        {speech.listening ? '■' : '🎤'}
-      </button>
-      <div className="text-sm text-ink-soft text-center">
-        {speech.listening
-          ? 'Listening… recite slowly and clearly'
-          : 'Tap the mic and recite the ayah'}
-      </div>
-      {(speech.transcript || speech.interim) && (
-        <div className="w-full bg-paper border-2 border-gray-200 rounded-2xl p-3">
-          <div className="text-xs uppercase font-bold text-ink-faint mb-1">
-            What we heard
-          </div>
-          <div className="font-arabic text-2xl text-ink" dir="rtl">
-            {speech.transcript}{' '}
-            <span className="text-ink-faint">{speech.interim}</span>
-          </div>
-        </div>
-      )}
-      {speech.error && (
-        <div className="text-sm text-accent-pink">
-          Mic error: {speech.error}. Make sure you allowed microphone access.
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ResultPanel({ result, usedFallback }) {
-  return (
-    <div className="w-full bg-cream border-2 border-accent-gold/40 rounded-2xl p-4 flex flex-col gap-2">
-      <div className="flex items-baseline justify-between">
-        <div className="text-3xl font-extrabold text-brand-500">
-          {result.score}
-          <span className="text-base text-ink-faint">/100</span>
-        </div>
-        <div className="text-xs uppercase font-bold text-ink-faint">
-          {result.status}
-        </div>
+        {words.map((w, i) => (
+          <span key={i} className={wordClass(w.status)} title={w.status}>
+            {w.word}
+            {i < words.length - 1 ? ' ' : ''}
+          </span>
+        ))}
       </div>
       <div className="text-sm text-ink">{result.message}</div>
-      {result.transcript && (
-        <div className="font-arabic text-xl text-ink-soft mt-1" dir="rtl">
-          {result.transcript}
-        </div>
-      )}
-      <div className="text-[10px] text-ink-faint">
-        Engine:{' '}
-        {result.source === 'whisper'
-          ? 'Whisper AI (Arabic)'
-          : 'Web Speech API'}
-        {usedFallback ? ' (fallback)' : ''}
-      </div>
+      <ResultLegend />
+    </div>
+  );
+}
+
+function wordClass(status) {
+  switch (status) {
+    case 'wrong-letters':
+    case 'wrong-diacritics':
+      return 'text-accent-pink';
+    case 'missing':
+      return 'text-ink-faint opacity-50';
+    default:
+      return 'text-ink';
+  }
+}
+
+function ResultLegend() {
+  return (
+    <div className="flex items-center gap-3 text-[10px] uppercase font-bold text-ink-faint flex-wrap">
+      <span className="flex items-center gap-1">
+        <span className="inline-block w-2 h-2 rounded-full bg-ink" />
+        match
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="inline-block w-2 h-2 rounded-full bg-accent-pink" />
+        wrong
+      </span>
+      <span className="flex items-center gap-1">
+        <span className="inline-block w-2 h-2 rounded-full bg-ink-faint opacity-50" />
+        missing (ok)
+      </span>
     </div>
   );
 }

@@ -1,85 +1,212 @@
 // Recitation verification.
 //
-// Two-mode operation — the *scoring* logic is identical, only the
+// Two-mode operation — the *comparison* logic is identical, only the
 // transcription source differs:
 //
 //   AI mode  (preferred): browser → POST /api/recitation/verify-audio with
 //            raw audio bytes. The Node server forwards the audio to the
 //            faster-whisper Python sidecar in asr_service/, gets an Arabic
-//            transcript back, and scores it.
+//            transcript back, and compares it.
 //
 //   Fallback: browser uses the Web Speech API locally, then POSTs the
-//            transcript to /api/recitation/verify. The server scores it.
-//            This path runs automatically when the ASR sidecar is down or
-//            still loading the model.
+//            transcript to /api/recitation/verify. The server compares it.
 //
-// Scoring: normalize Arabic (strip diacritics, unify alif/yaa/taa marbuta,
-// collapse whitespace), then Levenshtein-similarity against the canonical
-// Uthmani text.
+// Comparison model (no numerical score — see compareWords below):
+//   - Split canonical and user transcripts into words.
+//   - Align them sequentially, tolerating small skips so a missed word
+//     doesn't cascade into every following word being marked wrong.
+//   - For each canonical word, classify the user's attempt as:
+//       'match'              — letters match (and any user-supplied diacritics
+//                              also match the canonical).
+//       'wrong-diacritics'   — letters match but a diacritic the user spoke
+//                              disagrees with the canonical. RED in the UI.
+//       'wrong-letters'      — letters differ (different word). RED.
+//       'missing'            — user didn't say this word at all. Grey.
+//   - The user "passes" the verse iff there are no 'wrong-letters' and
+//     no 'wrong-diacritics' words. Missing words don't fail the verse.
+//
+// We render the canonical Arabic with full Quranic diacritization in the
+// client, colouring each word per its status, so the user always sees the
+// correct spelling (including dagger alif ـٰ and alef wasla ٱ) even when
+// their own transcript was unvocalised.
 
 import { getVerse } from '../data/quranContent.js';
 
 const ASR_URL = process.env.ASR_URL || 'http://localhost:5005';
 
-// --- Arabic normalization & scoring ----------------------------------------
+// ---------------------------------------------------------------------------
+// Arabic normalisation — diacritics and letter equivalences.
+//
+// We treat several letter forms as the *same* sound when comparing letters,
+// even though the Quran writes them differently:
+//
+//   ا   U+0627  alef                             — base form
+//   أ   U+0623  alef + hamza above               → ا
+//   إ   U+0625  alef + hamza below               → ا
+//   آ   U+0622  alef + madda                     → ا
+//   ٱ   U+0671  alef wasla (Quranic prosthetic) → ا
+//   ـٰ  U+0670  superscript / "dagger" alef     → ا  (dropped + treated as ا
+//                                                    when it occurs above a letter)
+//
+//   ي   U+064A  yeh                              — base form
+//   ى   U+0649  alef maksura                    → ي
+//   ئ   U+0626  yeh with hamza                  → ي
+//   ؤ   U+0624  waw with hamza                  → و
+//   ة   U+0629  taa marbuta                     → ه
+//   ك   U+0643  kaf                              — base form
+//   ک   U+06A9  Persian keheh                   → ك
+//
+// Diacritic block (purely cosmetic — no phonetic content):
+//   U+064B..U+0652  harakat + sukun + shadda + tanween
+//   U+0653..U+065F  extended Quranic marks (madda/hamza marks above & below)
+//   U+0640          tatweel (visual elongation only)
+//
+// IMPORTANT: U+0670 (dagger / superscript alef) is NOT a diacritic — it
+// stands in for a full alef letter. The Quran uses it because the consonantal
+// rasm of these words doesn't include an explicit ا, but the sound is alef.
+// We keep U+0670 in the input and convert it to 'ا' below so that
+// أَعْطَيْنَـٰكَ ≡ أعطيناك at the letter level.
+// ---------------------------------------------------------------------------
 
-function normalizeArabic(s) {
+const DIACRITIC_RE = /[ً-ْٓ-ٟـ]/g;
+
+// Letter equivalence table: source code-point → canonical form for comparison.
+const LETTER_EQUIV = {
+  'آ': 'ا', // alef + madda           → ا
+  'أ': 'ا', // alef + hamza above    → ا
+  'إ': 'ا', // alef + hamza below    → ا
+  'ٱ': 'ا', // alef wasla            → ا
+  'ٰ': 'ا', // U+0670 dagger alef    → ا   ← key fix: it's a letter, not a mark
+  'ى': 'ي', // alef maksura          → ي
+  'ئ': 'ي', // yeh + hamza           → ي
+  'ؤ': 'و', // waw + hamza           → و
+  'ة': 'ه', // taa marbuta           → ه
+  'ک': 'ك', // Persian keheh         → ك
+  'ی': 'ي', // Persian yeh           → ي
+};
+
+// Strip everything BUT the base letters: drop diacritics, then unify letter
+// forms, then collapse whitespace.
+export function normalizeLetters(s) {
   if (!s) return '';
-  return (
-    s
-      // remove diacritics (fatha, kasra, damma, sukun, shadda, tanween, etc.)
-      .replace(/[\u064B-\u0652\u0670\u0640]/g, '')
-      // unify alif forms
-      .replace(/[\u0622\u0623\u0625]/g, 'ا')
-      // unify yaa
-      .replace(/[\u0649]/g, 'ي')
-      // taa marbuta -> haa
-      .replace(/[\u0629]/g, 'ه')
-      // collapse whitespace
-      .replace(/\s+/g, ' ')
-      .trim()
-  );
+  let out = s.replace(DIACRITIC_RE, '');
+  out = out.replace(/./gu, (ch) => LETTER_EQUIV[ch] || ch);
+  return out.replace(/\s+/g, ' ').trim();
 }
 
-function levenshtein(a, b) {
-  if (a === b) return 0;
-  if (!a.length) return b.length;
-  if (!b.length) return a.length;
-  const dp = Array.from({ length: a.length + 1 }, () =>
-    new Array(b.length + 1).fill(0)
-  );
-  for (let i = 0; i <= a.length; i++) dp[i][0] = i;
-  for (let j = 0; j <= b.length; j++) dp[0][j] = j;
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
-      dp[i][j] = Math.min(
-        dp[i - 1][j] + 1,
-        dp[i][j - 1] + 1,
-        dp[i - 1][j - 1] + cost
-      );
+// Extract just the diacritic marks from a word, in order. Used to compare
+// the user's vocalisation against the canonical.
+export function extractDiacritics(word) {
+  if (!word) return '';
+  const marks = word.match(DIACRITIC_RE);
+  return marks ? marks.join('') : '';
+}
+
+// Backward-compatible name used by older callers (and the `_normalized`
+// fields kept in the response below for debugging).
+export function normalizeArabic(s) {
+  return normalizeLetters(s);
+}
+
+// ---------------------------------------------------------------------------
+// Word-level alignment + classification.
+// ---------------------------------------------------------------------------
+
+const PUNCT_RE = /[\.,;:?!،؛؟۔‏‎"'`]/g;
+
+function splitWords(s) {
+  if (!s) return [];
+  return s
+    .replace(PUNCT_RE, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+}
+
+function classifyWord(canonicalWord, userWord) {
+  const canonLetters = normalizeLetters(canonicalWord);
+  const userLetters = normalizeLetters(userWord);
+
+  if (canonLetters !== userLetters) return 'wrong-letters';
+
+  // Letters match. Did the user offer any diacritics? If not, that's fine
+  // (Web Speech almost always returns unvocalised text). If they did, they
+  // must agree with the canonical.
+  const userMarks = extractDiacritics(userWord);
+  if (!userMarks) return 'match';
+
+  const canonMarks = extractDiacritics(canonicalWord);
+  return userMarks === canonMarks ? 'match' : 'wrong-diacritics';
+}
+
+// Sequential word alignment with a small lookahead. Tolerates the user
+// inserting an extra word, skipping a word, or saying a word slightly
+// differently — so a single hiccup doesn't cascade.
+//
+// Returns an array of { word: <canonical-with-diacritics>, status }.
+export function compareWords(canonical, user) {
+  const C = splitWords(canonical);
+  const U = splitWords(user);
+  const out = [];
+  let ui = 0;
+  const LOOKAHEAD = 2;
+
+  for (let ci = 0; ci < C.length; ci++) {
+    const canonWord = C[ci];
+
+    if (ui >= U.length) {
+      out.push({ word: canonWord, status: 'missing' });
+      continue;
     }
+
+    const direct = classifyWord(canonWord, U[ui]);
+    if (direct === 'match' || direct === 'wrong-diacritics') {
+      out.push({ word: canonWord, status: direct });
+      ui++;
+      continue;
+    }
+
+    // Try lookahead: maybe the user inserted an extra word.
+    let matched = false;
+    for (let skip = 1; skip <= LOOKAHEAD && ui + skip < U.length; skip++) {
+      const trial = classifyWord(canonWord, U[ui + skip]);
+      if (trial === 'match' || trial === 'wrong-diacritics') {
+        out.push({ word: canonWord, status: trial });
+        ui = ui + skip + 1;
+        matched = true;
+        break;
+      }
+    }
+    if (matched) continue;
+
+    // Try lookahead in C: maybe the user skipped a canonical word.
+    let canonSkip = false;
+    for (let skip = 1; skip <= LOOKAHEAD && ci + skip < C.length; skip++) {
+      const trial = classifyWord(C[ci + skip], U[ui]);
+      if (trial === 'match' || trial === 'wrong-diacritics') {
+        // Mark intervening canonical words as missing, then re-align.
+        for (let k = 0; k < skip; k++) {
+          out.push({ word: C[ci + k], status: 'missing' });
+        }
+        out.push({ word: C[ci + skip], status: trial });
+        ci += skip;
+        ui++;
+        canonSkip = true;
+        break;
+      }
+    }
+    if (canonSkip) continue;
+
+    // No alignment found in window — user said a different word here.
+    out.push({ word: canonWord, status: 'wrong-letters' });
+    ui++;
   }
-  return dp[a.length][b.length];
+
+  return out;
 }
 
-function score(expected, got) {
-  const e = normalizeArabic(expected);
-  const g = normalizeArabic(got);
-  if (!g) return { score: 0, e, g };
-  const dist = levenshtein(e, g);
-  const len = Math.max(e.length, g.length);
-  return { score: Math.round((1 - dist / len) * 100), e, g };
-}
-
-function statusFromScore(s) {
-  if (s >= 85) return ['excellent', 'MashaAllah! Beautiful recitation.'];
-  if (s >= 65) return ['good', "Good effort! A little more practice and you'll have it perfectly."];
-  if (s >= 40) return ['partial', "You've got some of it. Listen to the audio one more time, then try again."];
-  return ['try_again', "Let's try once more. Tap the audio button to hear it, then repeat slowly."];
-}
-
-// --- Public API ------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Public API
+// ---------------------------------------------------------------------------
 
 export function compareRecitation({ verseKey, transcript }) {
   const verse = getVerse(verseKey);
@@ -88,29 +215,56 @@ export function compareRecitation({ verseKey, transcript }) {
   if (!transcript || !transcript.trim()) {
     return {
       ok: false,
-      score: 0,
       message:
         "We didn't hear your recitation. Tap the mic and try again in a quiet spot.",
+      words: splitWords(verse.text_uthmani).map((w) => ({
+        word: w,
+        status: 'missing',
+      })),
+      passed: false,
+      transcript: '',
+      expected_text: verse.text_uthmani,
     };
   }
 
-  const { score: s, e, g } = score(verse.text_uthmani, transcript);
-  const [status, message] = statusFromScore(s);
+  const words = compareWords(verse.text_uthmani, transcript);
+  const wrong = words.filter(
+    (w) => w.status === 'wrong-letters' || w.status === 'wrong-diacritics'
+  ).length;
+  const matched = words.filter((w) => w.status === 'match').length;
+  const passed = wrong === 0 && matched > 0;
+
+  let message;
+  if (passed && matched === words.length) {
+    message = 'MashaAllah! Beautiful recitation.';
+  } else if (passed) {
+    message = "Good — every word you said was right. Try saying the missing words next time.";
+  } else if (wrong === 1) {
+    message = 'Almost there — one word looks off. Try the red word again.';
+  } else {
+    message = "Let's try once more. Listen to the audio above and repeat slowly.";
+  }
 
   return {
     ok: true,
     verse_key: verseKey,
-    score: s,
-    status,
-    message,
     transcript,
     expected_text: verse.text_uthmani,
-    expected_normalized: e,
-    got_normalized: g,
+    words,
+    passed,
+    message,
+    summary: {
+      total: words.length,
+      matched,
+      wrong,
+      missing: words.length - matched - wrong,
+    },
   };
 }
 
-// --- ASR service integration -----------------------------------------------
+// ---------------------------------------------------------------------------
+// ASR service integration
+// ---------------------------------------------------------------------------
 
 export async function asrHealth() {
   try {
