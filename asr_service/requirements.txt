@@ -1,10 +1,24 @@
-fastapi
-uvicorn[standard]
-python-multipart
+# AyahQuest ASR — Python 3.10 / 3.11 / 3.12 / 3.13 compatible
+#
+# pydub was removed: it depends on `audioop`, which was dropped from the
+# Python stdlib in 3.13 (and never added to PyPy). Audio decoding is now
+# handled by shelling out to ffmpeg directly (subprocess) and reading the
+# resulting WAV with soundfile, which has no audioop dependency.
+#
+# System requirement: ffmpeg must be on PATH.
+#   macOS:  brew install ffmpeg
+#   Ubuntu: sudo apt install ffmpeg
 
-faster-whisper
-ctranslate2
+# Core ASR engine — downloads Whisper weights from Hugging Face on first run.
+faster-whisper>=1.0.3
 
-numpy
-soundfile
-pydantic
+# Audio I/O — reads/writes WAV/FLAC/OGG without audioop.
+soundfile>=0.12.1
+
+# Web framework
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+python-multipart>=0.0.9
+
+# Numerical
+numpy>=1.24

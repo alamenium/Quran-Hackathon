@@ -109,6 +109,42 @@ export const VERSES = {
       'Allah is making a clear promise here: the more genuinely grateful you are for what He has given you, the more He will give you. Gratitude is not just saying Alhamdulillah — it is feeling thankful in your heart and showing it in how you act and treat others. And when we forget to be grateful, we miss out on this increase.',
   },
 
+  // Saba 34:13 — key phrase: ٱعْمَلُوٓا۟ ءَالَ دَاوُۥدَ شُكْرًا
+  '34:13': {
+    verse_key: '34:13',
+    text_uthmani:
+      'يَعْمَلُونَ لَهُۥ مَا يَشَآءُ مِن مَّحَـٰرِيبَ وَتَمَـٰثِيلَ وَجِفَانٍ كَٱلْجَوَابِ وَقُدُورٍ رَّاسِيَـٰتٍ ۚ ٱعْمَلُوٓا۟ ءَالَ دَاوُۥدَ شُكْرًا ۚ وَقَلِيلٌ مِّنْ عِبَادِىَ ٱلشَّكُورُ',
+    translation:
+      'They worked for him whatever he wished — high chambers, statues, large bowls like reservoirs, and stationary pots. "Work, O family of Dawud, in gratitude." Few of My servants are truly grateful.',
+    audio_url: audioUrl(34, 13),
+    tafsir_simple:
+      'Allah gave the family of Dawud many gifts. Instead of just saying thank you, Allah told them: "Work in gratitude." Real gratitude is not only words — it is using what Allah gave you in a way that pleases Him. Gratitude has three parts: the heart remembering Allah, the tongue saying Alhamdulillah, and the hands using the blessing well.',
+  },
+
+  // Aal-Imran 3:145 — key phrase: وَسَنَجْزِى ٱلشَّـٰكِرِينَ
+  '3:145': {
+    verse_key: '3:145',
+    text_uthmani:
+      'وَمَا كَانَ لِنَفْسٍ أَن تَمُوتَ إِلَّا بِإِذْنِ ٱللَّهِ كِتَـٰبًا مُّؤَجَّلًا ۗ وَمَن يُرِدْ ثَوَابَ ٱلدُّنْيَا نُؤْتِهِۦ مِنْهَا وَمَن يُرِدْ ثَوَابَ ٱلْـَٔاخِرَةِ نُؤْتِهِۦ مِنْهَا ۚ وَسَنَجْزِى ٱلشَّـٰكِرِينَ',
+    translation:
+      'No soul can die except by Allah\'s permission, at a decree determined. Whoever wants the reward of this world — We give him from it; and whoever wants the reward of the Hereafter — We give him from it. And We will reward the grateful.',
+    audio_url: audioUrl(3, 145),
+    tafsir_simple:
+      'Allah promises a special reward for thankful people. Being grateful is not a small thing to Allah — He notices it and rewards it.',
+  },
+
+  // Al-Insan 76:3 — key phrase: إِمَّا شَاكِرًا وَإِمَّا كَفُورًا
+  '76:3': {
+    verse_key: '76:3',
+    text_uthmani:
+      'إِنَّا هَدَيْنَـٰهُ ٱلسَّبِيلَ إِمَّا شَاكِرًا وَإِمَّا كَفُورًا',
+    translation:
+      'Indeed, We guided him to the way, [whether he be] grateful or ungrateful.',
+    audio_url: audioUrl(76, 3),
+    tafsir_simple:
+      'Allah showed every person the way to be good. From there, each person chooses: be grateful and follow Allah\'s path, or be ungrateful and turn away. Gratitude is a choice we make every day.',
+  },
+
   // Luqman 31:12
   '31:12': {
     verse_key: '31:12',

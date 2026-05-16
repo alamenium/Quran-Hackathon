@@ -87,6 +87,13 @@ router.post('/quest-complete', async (req, res, next) => {
       if (u.streak.current >= 7) bset.add('week_with_quran');
       if (u.xp >= 100) bset.add('xp_100');
       if (u.savedWords.length >= 5) bset.add('word_collector');
+      // "Grateful Heart" badge — awarded once the Gratitude Compass Mission
+      // is complete (i.e. the final-action quest q_grat_compass_08_final
+      // is in completedQuests).
+      const completedIds = new Set(u.completedQuests.map((q) => q.questId));
+      if (completedIds.has('q_grat_compass_08_final')) {
+        bset.add('grateful_heart');
+      }
       u.badges = [...bset];
       return u;
     });

@@ -139,4 +139,7 @@ export const api = {
   // Classes (recitation)
   classes: () => request('/api/classes'),
   class: (id) => request(`/api/classes/${encodeURIComponent(id)}`),
+  // Quran Compass missions
+  compassMissions: () => request('/api/compass'),
+  compassMission: (id) => request(`/api/compass/${encodeURIComponent(id)}`),
 };

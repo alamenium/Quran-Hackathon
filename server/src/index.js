@@ -16,6 +16,7 @@ import storiesRouter from './routes/stories.js';
 import diagnosticRouter from './routes/diagnostic.js';
 import aiRouter from './routes/ai.js';
 import classesRouter from './routes/classes.js';
+import compassRouter from './routes/compass.js';
 import { asrHealth } from './services/recitation.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -55,6 +56,7 @@ app.use('/api/stories', storiesRouter);
 app.use('/api/diagnostic', diagnosticRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/classes', classesRouter);
+app.use('/api/compass', compassRouter);
 
 // Serve client build in production (single-deploy mode)
 const clientDist = path.resolve(__dirname, '../../client/dist');

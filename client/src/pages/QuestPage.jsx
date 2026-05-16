@@ -19,6 +19,7 @@ import { QuestionRenderer } from '../components/questions/QuestionRenderer.jsx';
 import { VerseCard } from '../components/VerseCard.jsx';
 import { Character } from '../components/Character.jsx';
 import { AudioButton } from '../components/AudioButton.jsx';
+import { SectionCompass } from '../components/SectionCompass.jsx';
 
 // Build a flat array of steps from quest data.
 function buildSteps(quest) {
@@ -46,6 +47,18 @@ function buildSteps(quest) {
       ...quest.tajweed,
       audio: quest.verses?.find(v => v.verse_key === quest.tajweed?.audio_example_verse),
     });
+  }
+
+  // New step: Allah's Name card (used by the Gratitude Compass — Quest 4).
+  if (quest.allah_name) {
+    steps.push({ type: 'allah_name', ...quest.allah_name });
+  }
+
+  // New step: Story link (used by the Gratitude Compass — Quest 6).
+  // Embeds an inline link card pointing at the symbolic story in the
+  // Storybook Library.
+  if (quest.story_id) {
+    steps.push({ type: 'story_link', story_id: quest.story_id });
   }
 
   // Step 5: Practise questions
@@ -152,6 +165,27 @@ export default function QuestPage() {
         score,
         reflections: collectedReflections,
       });
+      // If this was the final quest of the Gratitude Compass Mission,
+      // save the "My Quran Compass — Gratitude" card to localStorage so
+      // it surfaces on the Toolkit "Compass cards" tab.
+      if (
+        data.quest.id === 'q_grat_compass_08_final' &&
+        data.sectionMeta?.compass?.finalCard
+      ) {
+        try {
+          const key = 'aq_compass_cards';
+          const existing = JSON.parse(localStorage.getItem(key) || '[]');
+          const without = existing.filter((c) => c.missionId !== 'gratitude');
+          const entry = {
+            missionId: 'gratitude',
+            missionTitle: data.sectionMeta.title || 'Gratitude — Shukr',
+            emoji: '🌻',
+            savedAt: new Date().toISOString(),
+            card: data.sectionMeta.compass.finalCard,
+          };
+          localStorage.setItem(key, JSON.stringify([...without, entry]));
+        } catch { /* non-fatal */ }
+      }
       // Try to get Gemini lesson summary
       try {
         const res = await api.lessonSummary({
@@ -179,8 +213,23 @@ export default function QuestPage() {
       {/* Step label */}
       <StepLabel type={current?.type} />
 
+      {/* Compass header — shown only for quests inside a themed section
+          that defines a compass (currently: Gratitude Garden). One petal
+          per lens; the lens for THIS quest pulses; previously completed
+          lenses are green. */}
+      {data?.sectionMeta?.compass && data?.quest?.compass_lens && (
+        <QuestCompassHeader
+          sectionMeta={data.sectionMeta}
+          activeLens={data.quest.compass_lens}
+          completedQuestIds={new Set(user?.completedQuests || [])}
+          sectionId={data.sectionId}
+        />
+      )}
+
       <div className="flex-1 px-4 py-5 max-w-screen-md w-full mx-auto pb-40">
-        <StepRenderer step={current} onAnswer={handleAnswer} locked={!!feedback} />
+        {/* key on `pos` so the whole step renderer (and any local state in
+            its child question component) is fully reset between steps. */}
+        <StepRenderer key={pos} step={current} onAnswer={handleAnswer} locked={!!feedback} />
       </div>
 
       <FeedbackBar
@@ -240,6 +289,71 @@ function StepRenderer({ step, onAnswer, locked }) {
         ))}
         <button type="button" onClick={() => onAnswer({ correct: true, noFeedback: true })} className="duo-btn-primary">
           Continue
+        </button>
+      </div>
+    );
+  }
+
+  // --- Allah's Name card (Gratitude Compass — Quest 4) ---
+  if (step.type === 'allah_name') {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="bg-[#FFF8E7] border-2 border-[#F9C74F] rounded-3xl p-5 text-center shadow-card">
+          <div className="text-xs uppercase font-extrabold text-[#8A6A44] tracking-wide mb-2">
+            One of Allah's Names
+          </div>
+          <div className="font-arabic text-5xl text-ink leading-loose" dir="rtl">
+            {step.arabic}
+          </div>
+          <div className="text-base font-extrabold text-ink mt-2">
+            {step.transliteration}
+          </div>
+          <div className="text-sm text-ink-soft mt-3">{step.meaning}</div>
+          {step.child_explanation && (
+            <div className="mt-4 bg-white border-2 border-[#F9C74F]/60 rounded-2xl p-3 text-sm text-ink text-left">
+              {step.child_explanation}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => onAnswer({ correct: true, noFeedback: true })}
+          className="duo-btn-primary"
+        >
+          Continue
+        </button>
+      </div>
+    );
+  }
+
+  // --- Story link card (Gratitude Compass — Quest 6) ---
+  if (step.type === 'story_link') {
+    return (
+      <div className="flex flex-col gap-4">
+        <div className="bg-[#FFD6A5]/30 border-2 border-[#8A6A44]/30 rounded-3xl p-5">
+          <div className="text-xs uppercase font-extrabold text-[#8A6A44] tracking-wide mb-2">
+            Story time
+          </div>
+          <div className="font-extrabold text-ink text-lg mb-1">Work in Gratitude</div>
+          <p className="text-sm text-ink-soft">
+            Open the full 6-page story in the Storybook Library. Read it,
+            then come back here to answer the question.
+          </p>
+          <a
+            href={`/library/${step.story_id}`}
+            className="inline-block mt-3 duo-btn-primary"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Open story →
+          </a>
+        </div>
+        <button
+          type="button"
+          onClick={() => onAnswer({ correct: true, noFeedback: true })}
+          className="duo-btn-ghost"
+        >
+          I read it — continue
         </button>
       </div>
     );
@@ -317,6 +431,69 @@ function CompleteScreen({ quest, score, summary, onDone }) {
         {summary || defaultMsg}
       </div>
       <button onClick={onDone} className="duo-btn-primary w-full max-w-sm">Continue</button>
+    </div>
+  );
+}
+
+// Compass header for quests inside a themed section (Gratitude Garden today).
+// Walks `data.sectionMeta.compass.lenses`, marks every lens whose backing
+// quest is in `completedQuestIds` as unlocked, and pulses the lens for the
+// quest the user is currently inside.
+function QuestCompassHeader({ sectionMeta, activeLens, completedQuestIds, sectionId }) {
+  // The roadmap response carries unit→quest mapping, but we don't have it
+  // here. The cheap, correct rule: every lens earlier in the lens list
+  // than `activeLens` whose quest is also completed counts as unlocked.
+  // We can be more accurate by reading roadmap from the API; for now,
+  // simply include every lens whose backing quest (matching by position)
+  // appears in completedQuestIds is overkill — the simplest reliable
+  // proxy is the lens index relative to the active one + the active
+  // quest itself (handled by `activeLens`).
+  const lenses = sectionMeta.compass?.lenses || [];
+  const activeIdx = lenses.findIndex((l) => l.id === activeLens);
+  // Treat all lenses BEFORE the active one as unlocked iff the user has
+  // completed at least one quest in the section. This is conservative —
+  // a perfect implementation would look up the per-lens quest id from the
+  // roadmap. It's accurate as long as the user moves through lenses in
+  // order, which is the intended flow.
+  const haveCompleted = (completedQuestIds && completedQuestIds.size > 0);
+  const unlockedIds = lenses
+    .slice(0, Math.max(0, activeIdx))
+    .filter(() => haveCompleted)
+    .map((l) => l.id);
+
+  return (
+    <div
+      className="mx-auto max-w-screen-md w-full px-4 pt-3"
+    >
+      <div
+        className="rounded-2xl px-3 py-3 flex items-center gap-3 border-2"
+        style={{
+          background:
+            'linear-gradient(90deg, #FFF8E7 0%, #FFD6A5 60%, #B8EBD0 100%)',
+          borderColor: '#F9C74F',
+          color: '#40516A',
+        }}
+      >
+        <div className="shrink-0">
+          <SectionCompass
+            lenses={lenses}
+            unlockedIds={unlockedIds}
+            activeId={activeLens}
+            size={64}
+          />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] uppercase font-extrabold opacity-80 tracking-wide">
+            {sectionMeta.title} · {sectionMeta.compass?.missionTitle}
+          </div>
+          <div className="text-sm font-extrabold">
+            {lenses[activeIdx]?.emoji} {lenses[activeIdx]?.name} unlocking…
+          </div>
+          <div className="text-[11px] opacity-75">
+            {unlockedIds.length + 1}/{lenses.length} of the compass lit
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

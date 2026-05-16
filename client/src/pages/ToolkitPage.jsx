@@ -6,17 +6,28 @@ import { VerseCard } from '../components/VerseCard.jsx';
 import { AudioButton } from '../components/AudioButton.jsx';
 
 const TABS = [
+  { id: 'compass', label: 'Compass cards', icon: '🧭' },
   { id: 'mistakes', label: 'Mistakes', icon: '🩹' },
   { id: 'words', label: 'Words', icon: '📚' },
   { id: 'bookmarks', label: 'Bookmarks', icon: '⭐' },
   { id: 'reflections', label: 'Reflections', icon: '🪞' },
 ];
 
+// Read Compass cards saved to localStorage by CompassMissionPage.
+function loadCompassCards() {
+  try {
+    return JSON.parse(localStorage.getItem('aq_compass_cards') || '[]');
+  } catch {
+    return [];
+  }
+}
+
 export default function ToolkitPage() {
   const { user, toggleSavedWord, toggleBookmark, clearMistake } = useProgress();
-  const [tab, setTab] = useState('mistakes');
+  const [tab, setTab] = useState('compass');
   const [allWords, setAllWords] = useState([]);
   const [bookmarkVerses, setBookmarkVerses] = useState({});
+  const [compassCards, setCompassCards] = useState(() => loadCompassCards());
 
   useEffect(() => {
     api.words().then((d) => setAllWords(d.words));
@@ -62,7 +73,9 @@ export default function ToolkitPage() {
       <div className="flex gap-2 overflow-x-auto pb-3 mb-3">
         {TABS.map((t) => {
           const count =
-            t.id === 'mistakes'
+            t.id === 'compass'
+              ? compassCards.length
+              : t.id === 'mistakes'
               ? user.mistakes.length
               : t.id === 'words'
               ? user.savedWords.length
@@ -86,6 +99,30 @@ export default function ToolkitPage() {
           );
         })}
       </div>
+
+      {tab === 'compass' && (
+        <div className="flex flex-col gap-3">
+          {compassCards.length === 0 && (
+            <Empty
+              text="Finish a Quran Compass mission to save its card here."
+              emotion="think"
+            />
+          )}
+          {compassCards.map((entry) => (
+            <CompassCardView
+              key={entry.missionId}
+              entry={entry}
+              onDelete={() => {
+                const next = compassCards.filter((c) => c.missionId !== entry.missionId);
+                setCompassCards(next);
+                try {
+                  localStorage.setItem('aq_compass_cards', JSON.stringify(next));
+                } catch {}
+              }}
+            />
+          ))}
+        </div>
+      )}
 
       {tab === 'mistakes' && (
         <div className="flex flex-col gap-3">
@@ -262,6 +299,54 @@ function WordRow({ word, onAdd, onRemove }) {
           Remove
         </button>
       )}
+    </div>
+  );
+}
+
+function CompassCardView({ entry, onDelete }) {
+  const card = entry.card || {};
+  return (
+    <div className="bg-gradient-to-br from-cream to-paper border-2 border-accent-gold rounded-3xl p-5 shadow-card">
+      <div className="flex items-baseline justify-between mb-2">
+        <h3 className="text-base font-extrabold text-ink">
+          <span className="mr-2" aria-hidden>{entry.emoji || '🧭'}</span>
+          {card.title || entry.missionTitle}
+        </h3>
+        <button
+          type="button"
+          onClick={onDelete}
+          className="text-xs text-ink-faint hover:text-accent-pink underline"
+        >
+          remove
+        </button>
+      </div>
+      {Array.isArray(card.lines) && (
+        <ol className="space-y-1.5 text-ink leading-relaxed text-sm">
+          {card.lines.map((line, i) => (
+            <li key={i}>{line}</li>
+          ))}
+        </ol>
+      )}
+      {card.ayah && (
+        <div className="mt-3 border-t border-accent-gold/40 pt-3 text-right">
+          <div className="font-arabic text-xl text-ink leading-loose" dir="rtl">
+            {card.ayah}
+          </div>
+          {card.ayahEn && (
+            <div className="text-xs text-ink-soft mt-1 text-left italic">
+              "{card.ayahEn}"
+            </div>
+          )}
+          {card.ayahRef && (
+            <div className="text-[10px] font-bold text-ink-faint mt-1 text-left">
+              {card.ayahRef}
+            </div>
+          )}
+        </div>
+      )}
+      <div className="text-[10px] text-ink-faint mt-2">
+        Saved {new Date(entry.savedAt).toLocaleDateString()}
+      </div>
     </div>
   );
 }

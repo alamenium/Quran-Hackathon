@@ -81,13 +81,16 @@ export default function DiagnosticPage() {
 }
 
 function renderQ(q, onAnswer) {
+  // Key on q.id so React unmounts + remounts the child between questions —
+  // prevents the previous question's local state (selected option, etc.)
+  // from carrying over.
   switch (q.type) {
     case 'choose_meaning':
-      return <ChooseMeaning question={q} onAnswer={onAnswer} />;
+      return <ChooseMeaning key={q.id} question={q} onAnswer={onAnswer} />;
     case 'listen_choose':
-      return <ListenChoose question={q} onAnswer={onAnswer} />;
+      return <ListenChoose key={q.id} question={q} onAnswer={onAnswer} />;
     case 'tap_ayah_lesson':
-      return <TapAyahLesson question={q} onAnswer={onAnswer} />;
+      return <TapAyahLesson key={q.id} question={q} onAnswer={onAnswer} />;
     default:
       return <div>Unsupported diagnostic question.</div>;
   }

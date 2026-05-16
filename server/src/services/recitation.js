@@ -61,22 +61,30 @@ const ASR_URL = process.env.ASR_URL || 'http://localhost:5005';
 //   U+0653..U+065F  extended Quranic marks (madda/hamza marks above & below)
 //   U+0640          tatweel (visual elongation only)
 //
-// IMPORTANT: U+0670 (dagger / superscript alef) is NOT a diacritic — it
-// stands in for a full alef letter. The Quran uses it because the consonantal
-// rasm of these words doesn't include an explicit ا, but the sound is alef.
-// We keep U+0670 in the input and convert it to 'ا' below so that
-// أَعْطَيْنَـٰكَ ≡ أعطيناك at the letter level.
+// "Optional letters" — written in the Mushaf but pronounced or omitted
+// depending on tajweed context. We try matching with each kept AND elided.
+//
+//   U+0671  ٱ  alef wasla       — silent in continuation (هَمزة الوصل)
+//   U+0670  ٰ  dagger alef      — long-vowel alef written as a mark; some
+//                                  reciters' transcripts will spell it out
+//                                  (الرحمان), some won't (الرحمن).
+//
+// So when the canonical contains ٱلْكَوْثَرَ and the user says "lkawthar"
+// (because they connected speech), the user's "لكوثر" still matches.
+// And when the canonical contains أَعْطَيْنَـٰكَ, the user's "أعطيناك"
+// matches because we expand ٰ → ا.
 // ---------------------------------------------------------------------------
 
 const DIACRITIC_RE = /[ً-ْٓ-ٟـ]/g;
+const OPTIONAL_LETTER_RE = /[ٱٰ]/g;
 
-// Letter equivalence table: source code-point → canonical form for comparison.
+// Letter equivalence table — applied AFTER diacritic stripping but BEFORE
+// the optional-letter expansion/elision. ٱ and ٰ are deliberately NOT in
+// here so we can decide whether to drop or expand them per variant.
 const LETTER_EQUIV = {
   'آ': 'ا', // alef + madda           → ا
   'أ': 'ا', // alef + hamza above    → ا
   'إ': 'ا', // alef + hamza below    → ا
-  'ٱ': 'ا', // alef wasla            → ا
-  'ٰ': 'ا', // U+0670 dagger alef    → ا   ← key fix: it's a letter, not a mark
   'ى': 'ي', // alef maksura          → ي
   'ئ': 'ي', // yeh + hamza           → ي
   'ؤ': 'و', // waw + hamza           → و
@@ -85,13 +93,73 @@ const LETTER_EQUIV = {
   'ی': 'ي', // Persian yeh           → ي
 };
 
-// Strip everything BUT the base letters: drop diacritics, then unify letter
-// forms, then collapse whitespace.
+// Letter form WITHOUT trying any optional-letter variants. Used to compare
+// the user's text to itself (the user almost never writes ٱ or ٰ anyway).
 export function normalizeLetters(s) {
   if (!s) return '';
   let out = s.replace(DIACRITIC_RE, '');
   out = out.replace(/./gu, (ch) => LETTER_EQUIV[ch] || ch);
+  // Default representation for the user side: drop optional letters they
+  // probably didn't type and treat any remaining ٰ as a long alef.
+  out = out.replace(/ٱ/g, '').replace(/ٰ/g, 'ا');
   return out.replace(/\s+/g, ' ').trim();
+}
+
+// Expand a canonical word into the set of letter strings a *correct*
+// transcription could legitimately produce, given:
+//
+//   1. hamzat al-wasl ٱ:    silent in continuation
+//   2. dagger alef ٰ:       written as a mark, often spelled out as ا
+//   3. final-vowel elongation: a stressed final kasra/damma/fatha is often
+//      heard by Web Speech as a long vowel — kasra → ي, damma → و,
+//      fatha → ا. So فَصَلِّ ("fasallī") may be transcribed as فصلي.
+//      We also handle the inverse (user said the short form, canonical has
+//      the long form) by leaving the long vowel out of the variant set.
+//
+// In practice the variant set is tiny (≤ 4 entries), so just enumerate.
+function canonicalLetterVariants(word) {
+  // For elongation we need the LAST diacritic before any optional shadda
+  // (shadda U+0651 sits between the consonant and its vowel mark).
+  // Walk back from the end, skipping shadda, find the first vowel mark.
+  let finalVowel = null;
+  for (let i = word.length - 1; i >= 0; i--) {
+    const cp = word.charCodeAt(i);
+    if (cp === 0x0651) continue; // shadda — keep going
+    if (cp === 0x064E) { finalVowel = 'ا'; break; } // fatha → long alef
+    if (cp === 0x0650) { finalVowel = 'ي'; break; } // kasra → long yeh
+    if (cp === 0x064F) { finalVowel = 'و'; break; } // damma → long waw
+    if (cp >= 0x064B && cp <= 0x065F) continue;     // other diacritics — skip
+    if (cp === 0x0670) continue;                     // dagger alef — skip
+    if (cp === 0x0640) continue;                     // tatweel — skip
+    break; // hit a real letter; stop searching for a final vowel
+  }
+
+  const stripped = word
+    .replace(DIACRITIC_RE, '')
+    .replace(/./gu, (ch) => LETTER_EQUIV[ch] || ch);
+
+  // Find every ٱ or ٰ position; for each, choose drop vs keep-as-ا.
+  const positions = [];
+  for (let i = 0; i < stripped.length; i++) {
+    if (stripped[i] === 'ٱ' || stripped[i] === 'ٰ') positions.push(i);
+  }
+
+  const results = new Set();
+  const total = 1 << positions.length;
+  for (let mask = 0; mask < total; mask++) {
+    const chars = stripped.split('');
+    for (let p = 0; p < positions.length; p++) {
+      chars[positions[p]] = (mask >> p) & 1 ? '' : 'ا';
+    }
+    const base = chars.join('');
+    results.add(base);
+    // Elongated-final variant: append the long form of the final vowel,
+    // unless the word already ends in that letter.
+    if (finalVowel && base && base[base.length - 1] !== finalVowel) {
+      results.add(base + finalVowel);
+    }
+  }
+  return [...results];
 }
 
 // Extract just the diacritic marks from a word, in order. Used to compare
@@ -123,14 +191,17 @@ function splitWords(s) {
 }
 
 function classifyWord(canonicalWord, userWord) {
-  const canonLetters = normalizeLetters(canonicalWord);
   const userLetters = normalizeLetters(userWord);
+  const canonVariants = canonicalLetterVariants(canonicalWord);
 
-  if (canonLetters !== userLetters) return 'wrong-letters';
+  // Did any tajweed-aware spelling of the canonical match what the user said?
+  if (!canonVariants.includes(userLetters)) {
+    return 'wrong-letters';
+  }
 
-  // Letters match. Did the user offer any diacritics? If not, that's fine
-  // (Web Speech almost always returns unvocalised text). If they did, they
-  // must agree with the canonical.
+  // Letters match (under some valid pronunciation rule). If the user spoke
+  // diacritics too, they must agree with the canonical's; missing diacritics
+  // are always fine.
   const userMarks = extractDiacritics(userWord);
   if (!userMarks) return 'match';
 

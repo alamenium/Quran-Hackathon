@@ -129,6 +129,117 @@ export const STORIES = [
       },
     },
   },
+
+  // -----------------------------------------------------------------------
+  // Work in Gratitude — the Family-of-Dawud arc (Saba 34:13).
+  //
+  // IMPORTANT: This story does NOT depict Prophet Dawud عليه السلام at
+  // all. All scene visuals are symbolic — tools, light, garden, hands,
+  // scrolls — and we tell the lesson through the narrator character (the
+  // Bear guide already in the app).
+  //
+  // Voiceover audio files are referenced under public/audio/stories/
+  // gratitude/scene-N.mp3. The StoryPage renders the audio button
+  // gracefully — disabled if the file isn't present yet.
+  // -----------------------------------------------------------------------
+  {
+    id: 'story_work_in_gratitude',
+    title: 'Work in Gratitude',
+    surah_reference: '34:13',
+    summary:
+      'Allah gave the family of Dawud many gifts — and taught them that real gratitude is not just words, but using blessings well.',
+    cover_emotion: 'happy',
+    theme: 'gratitude',
+    audio_dir: '/audio/stories/gratitude',
+    pages: [
+      {
+        page: 1,
+        text:
+          'Today we learn something special about gratitude. Saying "Alhamdulillah" is beautiful — but gratitude is even bigger than words.',
+        narration:
+          'Today we learn that gratitude is more than words. Allah taught the family of Dawud how to be truly thankful.',
+        audio: 'scene-1.mp3',
+        emotion: 'smile',
+        visual_hint:
+          'Storybook opens in the Gratitude Garden. Warm light, soft pastel sky, the Bear guide holding a scroll.',
+      },
+      {
+        page: 2,
+        text:
+          'Allah gave the family of Dawud many blessings — strength to work, beautiful sounds, and skills to build wonderful things.',
+        narration:
+          'Allah gave the family of Dawud many blessings. Strength to work. Beautiful sounds. Skills to build wonderful things.',
+        audio: 'scene-2.mp3',
+        emotion: 'happy',
+        visual_hint:
+          'Symbolic workshop bathed in golden morning light. Carpentry tools, scrolls, a small garden, gentle birds. NO figures.',
+      },
+      {
+        page: 3,
+        text: 'Allah taught them with one short, powerful instruction: "Work in gratitude."',
+        narration:
+          'And Allah taught them with one short, powerful instruction: work in gratitude.',
+        audio: 'scene-3.mp3',
+        emotion: 'think',
+        visual_hint:
+          'A respectful, clean ayah card with the key phrase ٱعْمَلُوٓا۟ ءَالَ دَاوُۥدَ شُكْرًا (no animation on the ayah itself).',
+      },
+      {
+        page: 4,
+        text:
+          'That means using Allah\'s gifts in the way He loves — with care, with kindness, and to help others.',
+        narration:
+          'That means using Allah\'s gifts in the way He loves. With care. With kindness. To help others.',
+        audio: 'scene-4.mp3',
+        emotion: 'happy',
+        visual_hint:
+          'Hands building, watering plants, sharing bread — close-up of hands only, no faces. Warm gold light.',
+      },
+      {
+        page: 5,
+        text:
+          'It is the same for us. When Allah gives us a skill — like swimming, drawing, helping — we use it safely and kindly.',
+        narration:
+          'It is the same for us. When Allah gives us a skill, we use it safely. We use it kindly.',
+        audio: 'scene-5.mp3',
+        emotion: 'smile',
+        visual_hint:
+          'Modern child at a calm pool, sky-blue water, Bear guide nearby smiling. Small "good deed star" rising gently.',
+      },
+      {
+        page: 6,
+        text:
+          'A thankful heart turns blessings into good actions. That is what shukr really means.',
+        narration:
+          'A thankful heart turns blessings into good actions. That is what shukr really means.',
+        audio: 'scene-6.mp3',
+        emotion: 'star',
+        visual_hint:
+          'Compass with the Story Lens lighting up. Flowers blooming around the path. Bear guide gives a thumbs-up.',
+      },
+    ],
+    activity: {
+      type: 'choose_meaning',
+      prompt: 'What does "work in gratitude" mean?',
+      options: [
+        'Only say "thank you" — what you do afterward does not matter',
+        'Show people how good you are with your blessing',
+        'Use Allah\'s blessings in a way that pleases Him',
+        'Stop using the blessing so it lasts longer',
+      ],
+      correctIndex: 2,
+      lesson_question: {
+        prompt: 'Gratitude is…',
+        options: [
+          'A heart that remembers Allah, a tongue that says Alhamdulillah, and actions that use blessings well',
+          'Only words',
+          'Only the heart',
+          'Only what we do for people to see',
+        ],
+        correctIndex: 0,
+      },
+    },
+  },
 ];
 
 export function getStory(id) {

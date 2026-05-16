@@ -37,13 +37,22 @@ router.get('/daily', (_req, res) => {
   });
 });
 
-// GET /api/quests/:id — full quest with hydrated verses
+// GET /api/quests/:id — full quest with hydrated verses.
+// We also surface the parent section's themed metadata (theme + compass)
+// so the client can render the right header without an extra round-trip.
 router.get('/:id', (req, res) => {
   const ctx = findQuest(req.params.id);
   if (!ctx) return res.status(404).json({ error: 'Quest not found' });
   res.json({
     sectionId: ctx.section.id,
     unitId: ctx.unit.id,
+    sectionMeta: {
+      title: ctx.section.title,
+      theme: ctx.section.theme || null,
+      world: ctx.section.world || null,
+      color: ctx.section.color || null,
+      compass: ctx.section.compass || null,
+    },
     quest: hydrateQuest(ctx.quest),
   });
 });

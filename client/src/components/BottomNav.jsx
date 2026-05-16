@@ -2,10 +2,10 @@ import { NavLink } from 'react-router-dom';
 
 const items = [
   { to: '/', label: 'Learn', icon: '🏠' },
-  { to: '/classes', label: 'Classes', icon: '🎤' },
+  { to: '/compass', label: 'Compass', icon: '🧭' },
+  { to: '/classes', label: 'Recite', icon: '🎤' },
   { to: '/library', label: 'Stories', icon: '📖' },
   { to: '/listen', label: 'Listen', icon: '🎧' },
-  { to: '/tutor', label: 'Tutor', icon: '🤖' },
   { to: '/toolkit', label: 'Toolkit', icon: '🎒' },
 ];
 

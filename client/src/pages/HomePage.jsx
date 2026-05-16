@@ -4,6 +4,22 @@ import { api } from '../lib/api.js';
 import { useProgress } from '../context/ProgressContext.jsx';
 import { Character } from '../components/Character.jsx';
 import { SpeechBubble } from '../components/SpeechBubble.jsx';
+import { SectionCompass } from '../components/SectionCompass.jsx';
+
+// Compute which compass lenses have been unlocked, given the user's set
+// of completed quest ids. A lens unlocks when its corresponding quest
+// (the one carrying `compass_lens: <lensId>`) has been completed.
+function unlockedLensIds(section, completedSet) {
+  const ids = [];
+  for (const unit of section.units || []) {
+    for (const quest of unit.quests || []) {
+      if (quest.compass_lens && completedSet.has(quest.id)) {
+        ids.push(quest.compass_lens);
+      }
+    }
+  }
+  return ids;
+}
 
 // Home: shows the section/unit/quest roadmap, plus a Daily Quest button.
 export default function HomePage() {
@@ -116,6 +132,30 @@ export default function HomePage() {
 }
 
 function SectionBlock({ section, completedSet, activeQuestId }) {
+  // Themed sections (e.g. Gratitude Garden) get a distinct hero card with
+  // the compass wheel showing live progress against the section's lenses.
+  if (section.theme === 'gratitude' && section.compass) {
+    return (
+      <section>
+        <GratitudeGardenHero
+          section={section}
+          completedSet={completedSet}
+        />
+        <div className="flex flex-col gap-6">
+          {section.units.map((unit) => (
+            <UnitBlock
+              key={unit.id}
+              unit={unit}
+              color={section.color}
+              completedSet={completedSet}
+              activeQuestId={activeQuestId}
+            />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section>
       <div
@@ -238,6 +278,61 @@ function ErrorScreen({ error }) {
       <button onClick={() => location.reload()} className="duo-btn-primary">
         Try again
       </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Gratitude Garden hero — themed header card for the sec_gratitude section
+// that contains the Quran Compass Mission. Cream + honey-gold + mint palette,
+// large compass on the right showing live progress against the lenses.
+// ---------------------------------------------------------------------------
+function GratitudeGardenHero({ section, completedSet }) {
+  const compass = section.compass || {};
+  const lenses = compass.lenses || [];
+  const unlockedIds = unlockedLensIds(section, completedSet);
+  const done = unlockedIds.length;
+  const total = lenses.length;
+
+  return (
+    <div
+      className="rounded-3xl px-4 py-4 mb-4 shadow-card border-2"
+      style={{
+        background:
+          'linear-gradient(135deg, #FFF8E7 0%, #FFD6A5 55%, #B8EBD0 100%)',
+        borderColor: '#F9C74F',
+        color: '#40516A',
+      }}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex-1 min-w-0">
+          <div className="text-[10px] uppercase font-extrabold tracking-wide opacity-80">
+            Section {section.order} · Gratitude Garden 🌻
+          </div>
+          <div className="text-xl font-extrabold mt-0.5">{section.title}</div>
+          {section.subtitle && (
+            <div className="text-sm opacity-90 mt-1">{section.subtitle}</div>
+          )}
+          {compass.missionTitle && (
+            <div
+              className="mt-3 inline-flex items-center gap-1.5 text-xs font-extrabold px-2.5 py-1 rounded-full"
+              style={{ background: '#FFFFFFAA', color: '#8A6A44' }}
+            >
+              🧭 Mission · {compass.missionTitle}
+            </div>
+          )}
+          <div className="mt-2 text-xs font-bold opacity-80">
+            {done}/{total} lenses lit
+          </div>
+        </div>
+        <div className="shrink-0">
+          <SectionCompass
+            lenses={lenses}
+            unlockedIds={unlockedIds}
+            size={120}
+          />
+        </div>
+      </div>
     </div>
   );
 }

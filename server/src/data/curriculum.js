@@ -20,8 +20,42 @@ export const SECTIONS = [
     id: 'sec_gratitude',
     order: 1,
     title: 'Gratitude — Shukr',
-    subtitle: 'What does it mean to truly thank Allah?',
-    color: '#58CC02',
+    subtitle: 'Learning to notice Allah\'s blessings and use them well.',
+    // Themed "world" — the client renders this section with the Gratitude
+    // Garden palette + hero, distinct from other sections.
+    theme: 'gratitude',
+    world: 'gratitude-garden',
+    color: '#F9C74F',
+    badgeId: 'grateful_heart',
+    // Quran Compass Mission metadata — used by the SectionCompass component
+    // to render the 8-petal wheel at the top of the section. Lens N unlocks
+    // when the user completes quest N of the compass unit.
+    compass: {
+      missionTitle: 'Use the Blessing Well',
+      lenses: [
+        { id: 'blessing', name: 'Blessing Lens', emoji: '🎁' },
+        { id: 'word',     name: 'Word Lens',     emoji: '🌱' },
+        { id: 'ayah',     name: 'Ayah Lens',     emoji: '📖' },
+        { id: 'name',     name: "Allah's Name",  emoji: '✨' },
+        { id: 'surah',    name: 'Surah Lens',    emoji: '🕌' },
+        { id: 'story',    name: 'Story Lens',    emoji: '📜' },
+        { id: 'heart',    name: 'Heart Lens',    emoji: '❤️' },
+        { id: 'action',   name: 'Action Lens',   emoji: '🧭' },
+      ],
+      finalCard: {
+        title: 'My Quran Compass — Gratitude',
+        lines: [
+          'When Allah gives me a blessing:',
+          '1. I remember it is from Allah.',
+          '2. I say Alhamdulillah.',
+          '3. I use it in a good way.',
+          '4. I do good for Allah, not to show off.',
+        ],
+        ayah: 'وَإِن تَعُدُّوا۟ نِعْمَتَ ٱللَّهِ لَا تُحْصُوهَآ',
+        ayahRef: '14:34',
+        ayahEn: 'If you tried to count Allah\'s blessings, you could not number them.',
+      },
+    },
     units: [
       {
         id: 'unit_gratitude_core',
@@ -246,6 +280,405 @@ export const SECTIONS = [
               allow_custom: true,
             },
             asbab_al_nuzul: null,
+          },
+        ],
+      },
+      // -------------------------------------------------------------------
+      // Unit 2 — The Quran Compass Mission (Gratitude Garden)
+      //
+      // Eight connected quests forming a single arc. The child meets a
+      // real-life scenario in quest 1 (a swimming-skill show-off), then
+      // unlocks one Compass lens per quest, then returns to the SAME
+      // scenario in quest 8 and chooses the Quran-informed answer. The
+      // lenses are: Blessing, Word, Ayah, Allah's Name, Surah, Story,
+      // Heart, Action — matching `compass.lenses` on this section.
+      //
+      // Constraints honoured (per project spec):
+      //   - الأحد / الصمد and Surah Al-Ikhlas are NOT included in this unit.
+      //   - الشكور IS included.
+      //   - Shukr = heart + tongue + action (Saba 34:13 anchors the action
+      //     piece). Al-Kawthar 108:1–2 anchors the Juz Amma piece.
+      //   - The Family-of-Dawud story uses symbolic visuals only — no
+      //     depiction of Prophet Dawud عليه السلام.
+      // -------------------------------------------------------------------
+      {
+        id: 'unit_gratitude_compass',
+        order: 2,
+        title: 'Quran Compass — Gratitude Garden',
+        focus: 'A connected 8-quest mission. Open the compass; use the blessing well.',
+        quests: [
+          // ---------- Quest 1 — Opening Compass (Blessing Lens) ----------
+          {
+            id: 'q_grat_compass_01_opening',
+            order: 1,
+            title: 'The Swimming Blessing',
+            xp: 12,
+            theme: 'gratitude',
+            // Compass metadata: which lens this quest unlocks.
+            compass_lens: 'blessing',
+            verses: [],
+            questions: [
+              {
+                type: 'moral_scenario',
+                setup:
+                  'Abdullah just learned how to swim. He feels excited. At the pool he wants to shout, "Look at me — I\'m better than everyone!" He even thinks about swimming in the deep, unsafe side to impress people.',
+                question: 'What should Abdullah remember FIRST?',
+                options: [
+                  {
+                    text: 'This skill is a blessing from Allah.',
+                    correct: true,
+                    feedback:
+                      'Beautiful. Learning to swim is a blessing — a niʿmah from Allah. That changes everything that comes next.',
+                  },
+                  {
+                    text: 'I am better than everyone.',
+                    correct: false,
+                    feedback:
+                      'A blessing should make us remember Allah, not feel above other people.',
+                  },
+                  {
+                    text: 'I should swim in dangerous places so people clap.',
+                    correct: false,
+                    feedback:
+                      'Allah gave us this skill so we use it safely and well — not to chase claps.',
+                  },
+                  {
+                    text: 'I do not need to thank anyone.',
+                    correct: false,
+                    feedback:
+                      'Every good thing we can do came from Allah first. Gratitude starts there.',
+                  },
+                ],
+              },
+            ],
+          },
+          // ---------- Quest 2 — Word Garden (Word Lens) ----------
+          {
+            id: 'q_grat_compass_02_words',
+            order: 2,
+            title: 'Word Garden: Blessing Words',
+            xp: 15,
+            theme: 'gratitude',
+            compass_lens: 'word',
+            verses: [],
+            words: [
+              {
+                arabic: 'ٱلشُّكْر',
+                transliteration: 'ash-shukr',
+                root: 'ش ك ر',
+                meaning: 'Gratitude — knowing the blessing is from Allah and using it well.',
+                in_ayah: '"…work in gratitude" (34:13)',
+              },
+              {
+                arabic: 'ٱلنِّعْمَة',
+                transliteration: 'an-niʿmah',
+                root: 'ن ع م',
+                meaning: 'A blessing — anything good Allah gives us.',
+                in_ayah: '"If you tried to count Allah\'s blessings…" (14:34)',
+              },
+              {
+                arabic: 'ٱلْحَمْد',
+                transliteration: 'al-ḥamd',
+                root: 'ح م د',
+                meaning: 'Praise and thanks — saying Alhamdulillah.',
+                in_ayah: '"All praise is for Allah, Lord of the worlds" (1:2)',
+              },
+              {
+                arabic: 'ٱلرِّزْق',
+                transliteration: 'ar-rizq',
+                root: 'ر ز ق',
+                meaning: 'Provision from Allah — food, knowledge, family, ability…',
+              },
+              {
+                arabic: 'كَفُور',
+                transliteration: 'kafūr',
+                root: 'ك ف ر',
+                meaning: 'Ungrateful — forgetting the blessing came from Allah, or misusing it.',
+                in_ayah: '"…grateful or ungrateful" (76:3)',
+              },
+            ],
+            questions: [
+              {
+                type: 'meaning_match',
+                prompt: 'Match each word to its meaning',
+                pairs: [
+                  { arabic: 'ٱلنِّعْمَة', meaning: 'A blessing from Allah' },
+                  { arabic: 'ٱلشُّكْر', meaning: 'Gratitude — using the blessing well' },
+                  { arabic: 'كَفُور', meaning: 'Forgetting / misusing the blessing' },
+                  { arabic: 'ٱلْحَمْد', meaning: 'Praise — saying Alhamdulillah' },
+                ],
+              },
+              {
+                type: 'choose_meaning',
+                prompt: 'What does ٱلشُّكْر mean?',
+                arabic: 'ٱلشُّكْر',
+                options: [
+                  'Knowing the blessing is from Allah and using it well',
+                  'Complaining about what Allah gave us',
+                  'Hiding all blessings so no one can see them',
+                  'Making people praise us',
+                ],
+                correctIndex: 0,
+              },
+              {
+                type: 'choose_meaning',
+                prompt: 'What does كَفُور mean here?',
+                arabic: 'كَفُور',
+                options: [
+                  'Being thankful',
+                  'Sharing kindly with everyone',
+                  'Forgetting or misusing Allah\'s blessing',
+                  'Saying Alhamdulillah',
+                ],
+                correctIndex: 2,
+              },
+            ],
+          },
+          // ---------- Quest 3 — Gratitude is Action (Ayah Lens) ----------
+          {
+            id: 'q_grat_compass_03_action_ayah',
+            order: 3,
+            title: 'Gratitude Is Action — Saba 34:13',
+            xp: 15,
+            theme: 'gratitude',
+            compass_lens: 'ayah',
+            verses: ['34:13'],
+            words: [
+              {
+                arabic: 'ٱعْمَلُوٓا۟',
+                transliteration: 'iʿmalū',
+                root: 'ع م ل',
+                meaning: 'Work / do (an action)',
+                in_ayah: '"Work, O family of Dawud…"',
+              },
+              {
+                arabic: 'شُكْرًا',
+                transliteration: 'shukran',
+                root: 'ش ك ر',
+                meaning: 'In gratitude',
+                in_ayah: '"…work in gratitude"',
+              },
+            ],
+            questions: [
+              {
+                type: 'choose_meaning',
+                prompt:
+                  'Allah told the family of Dawud: "Work in gratitude." Does that mean we only need to SAY Alhamdulillah?',
+                options: [
+                  'No — we say Alhamdulillah AND use the blessing well.',
+                  'Yes — we only say it and then we can do anything.',
+                  'No — we never need to say Alhamdulillah.',
+                  'It means showing everyone how good we are.',
+                ],
+                correctIndex: 0,
+              },
+            ],
+          },
+          // ---------- Quest 4 — Ash-Shakoor (Allah's Name Lens) ----------
+          {
+            id: 'q_grat_compass_04_ash_shakoor',
+            order: 4,
+            title: "Allah's Name: Ash-Shakūr",
+            xp: 15,
+            theme: 'gratitude',
+            compass_lens: 'name',
+            verses: [],
+            // Inline "Allah's Name" panel — rendered specially by the
+            // QuestPage when a quest has this field.
+            allah_name: {
+              arabic: 'ٱلشَّكُور',
+              transliteration: 'Ash-Shakūr',
+              meaning: 'The Most Appreciative — Allah notices and rewards sincere good deeds, even small ones.',
+              child_explanation:
+                'Allah sees every good thing you do for Him, even when nobody else sees it. Your small good deeds matter to Allah.',
+            },
+            questions: [
+              {
+                type: 'moral_scenario',
+                setup:
+                  'Mariam quietly helps her sister clean up the toys after a long day. Nobody else is in the room. Nobody saw her do it.',
+                question: 'Who notices Mariam\'s kindness?',
+                options: [
+                  {
+                    text: 'Allah notices — He is Ash-Shakūr.',
+                    correct: true,
+                    feedback:
+                      'Yes. Allah is الشَّكُور — He sees and appreciates every sincere good deed, even quiet ones.',
+                  },
+                  {
+                    text: 'Nobody knows, so it does not matter.',
+                    correct: false,
+                    feedback:
+                      'Allah always knows. Sincere good is never wasted.',
+                  },
+                  {
+                    text: 'Only the toys know.',
+                    correct: false,
+                    feedback:
+                      'A sweet thought! But really — Allah is the One who sees what people do not.',
+                  },
+                  {
+                    text: 'It only matters if people clap.',
+                    correct: false,
+                    feedback:
+                      'Then we would always need an audience. Allah teaches us to do good for Him, not for the clapping.',
+                  },
+                ],
+              },
+            ],
+          },
+          // ---------- Quest 5 — Surah Al-Kawthar (Surah Lens) ----------
+          {
+            id: 'q_grat_compass_05_kawthar',
+            order: 5,
+            title: 'Surah World: Al-Kawthar',
+            xp: 18,
+            theme: 'gratitude',
+            compass_lens: 'surah',
+            verses: ['108:1', '108:2'],
+            questions: [
+              {
+                type: 'listen_choose',
+                prompt: 'Listen to ayah 108:1, then choose the meaning.',
+                audio: { verse_key: '108:1' },
+                options: [
+                  { label: 'Indeed, We have granted you al-Kawthar (great abundance).', correct: true },
+                  { label: 'Stand up at night and pray.', correct: false },
+                  { label: 'Spend from what We have given you.', correct: false },
+                ],
+              },
+              {
+                type: 'choose_meaning',
+                prompt:
+                  'Allah gives great good (al-Kawthar). What does Surah Al-Kawthar tell us to do in response?',
+                options: [
+                  'Show it off so people respect us',
+                  'Pray and thank Allah for it',
+                  'Hide it and forget Allah',
+                  'Waste the blessings',
+                ],
+                correctIndex: 1,
+              },
+            ],
+          },
+          // ---------- Quest 6 — Story Detective (Story Lens) ----------
+          {
+            id: 'q_grat_compass_06_story',
+            order: 6,
+            title: 'Story Detective: Work in Gratitude',
+            xp: 18,
+            theme: 'gratitude',
+            compass_lens: 'story',
+            // Link to the symbolic story added to stories.js. The Storybook
+            // Library page can show it; clicking from here also opens it.
+            story_id: 'story_work_in_gratitude',
+            verses: ['34:13'],
+            questions: [
+              {
+                type: 'choose_meaning',
+                prompt: 'What does "work in gratitude" mean?',
+                options: [
+                  'Use Allah\'s blessings in a way that pleases Him',
+                  'Only say "thank you" but use blessings badly',
+                  'Show people that you are better than them',
+                  'Stop using the blessing so it doesn\'t get used up',
+                ],
+                correctIndex: 0,
+              },
+            ],
+          },
+          // ---------- Quest 7 — Heart Lab (Heart Lens) ----------
+          {
+            id: 'q_grat_compass_07_heart_lab',
+            order: 7,
+            title: 'Heart Lab: Thankful or Forgetful?',
+            xp: 18,
+            theme: 'gratitude',
+            compass_lens: 'heart',
+            verses: ['76:3'],
+            questions: [
+              {
+                // New question type — see client/src/components/questions/HeartLabSort.jsx
+                type: 'heart_lab_sort',
+                prompt:
+                  'Sort each action into the right heart. Thankful actions remember Allah and use the blessing well.',
+                buckets: [
+                  { id: 'thankful', label: 'Thankful Heart', emoji: '❤️' },
+                  { id: 'forgetful', label: 'Forgetful / Show-off Heart', emoji: '🌫' },
+                ],
+                items: [
+                  { text: 'Says Alhamdulillah after a gift.', bucket: 'thankful' },
+                  { text: 'Uses swimming skill safely.', bucket: 'thankful' },
+                  { text: 'Helps a beginner feel brave.', bucket: 'thankful' },
+                  { text: 'Shares extra food kindly.', bucket: 'thankful' },
+                  { text: 'Helps when nobody is watching.', bucket: 'thankful' },
+                  { text: 'Complains about every meal.', bucket: 'forgetful' },
+                  { text: 'Wastes food.', bucket: 'forgetful' },
+                  { text: '"I got this because I am amazing."', bucket: 'forgetful' },
+                  { text: 'Swims dangerously to impress people.', bucket: 'forgetful' },
+                  { text: 'Helps only when people are watching.', bucket: 'forgetful' },
+                ],
+              },
+            ],
+          },
+          // ---------- Quest 8 — Final Compass (Action Lens) ----------
+          {
+            id: 'q_grat_compass_08_final',
+            order: 8,
+            title: 'Quran Compass Mission: Use the Blessing Well',
+            xp: 25,
+            theme: 'gratitude',
+            compass_lens: 'action',
+            verses: [],
+            // Same scenario as quest 1 — but now the Quran Compass is open.
+            // The "correct" answer is the multi-step Quran Compass choice.
+            questions: [
+              {
+                type: 'moral_scenario',
+                setup:
+                  'Back to Abdullah. He learned to swim, and he is great at it. He wants to show off and swim in a dangerous part of the pool. Then he notices another child who is scared because they cannot swim well.',
+                question: 'The Compass is open. What is the Quran Compass choice?',
+                options: [
+                  {
+                    text:
+                      'Say Alhamdulillah, swim safely, avoid showing off, and use the skill to encourage and help the other child.',
+                    correct: true,
+                    feedback:
+                      'Beautiful choice. Abdullah remembered the blessing came from Allah, thanked Him, and used the blessing in a way Allah loves.',
+                  },
+                  {
+                    text: 'Swim dangerously so everyone claps.',
+                    correct: false,
+                    feedback:
+                      'A blessing should bring us closer to Allah, not put us in danger to impress people.',
+                  },
+                  {
+                    text: 'Laugh at the child who cannot swim.',
+                    correct: false,
+                    feedback:
+                      'A thankful heart is gentle with others, never mocking.',
+                  },
+                  {
+                    text: '"I am better than everyone."',
+                    correct: false,
+                    feedback:
+                      'The ability came from Allah. The right response is shukr — not pride.',
+                  },
+                ],
+              },
+            ],
+            // The reflection step at the end saves the Grateful-Heart card
+            // to Toolkit and awards the badge.
+            reflection: {
+              prompt: 'What is one blessing Allah gave you today, and how will you use it well?',
+              options: [
+                'My family / friends',
+                'My health and body',
+                'A skill I am learning',
+                'The Quran in my life',
+              ],
+              allow_custom: true,
+            },
           },
         ],
       },

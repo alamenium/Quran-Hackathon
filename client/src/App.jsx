@@ -15,8 +15,10 @@ import ProfilePage from './pages/ProfilePage.jsx';
 import TutorPage from './pages/TutorPage.jsx';
 import ClassesPage from './pages/ClassesPage.jsx';
 import ClassPage from './pages/ClassPage.jsx';
+import CompassPage from './pages/CompassPage.jsx';
+import CompassMissionPage from './pages/CompassMissionPage.jsx';
 
-const FULLSCREEN_PREFIXES = ['/welcome', '/diagnostic', '/quest/', '/library/', '/tutor', '/classes/'];
+const FULLSCREEN_PREFIXES = ['/welcome', '/diagnostic', '/quest/', '/library/', '/tutor', '/classes/', '/compass/'];
 
 function isFullscreen(pathname) {
   return FULLSCREEN_PREFIXES.some((p) =>
@@ -53,6 +55,8 @@ export default function App() {
           <Route path="/tutor" element={<TutorPage />} />
           <Route path="/classes" element={<ClassesPage />} />
           <Route path="/classes/:id" element={<ClassPage />} />
+          <Route path="/compass" element={<CompassPage />} />
+          <Route path="/compass/:id" element={<CompassMissionPage />} />
           <Route path="*" element={<HomePage />} />
         </Routes>
       </Chrome>

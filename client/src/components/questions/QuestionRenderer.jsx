@@ -8,6 +8,7 @@ import { Reflection } from './Reflection.jsx';
 import { Recite } from './Recite.jsx';
 import { MoralScenario } from './MoralScenario.jsx';
 import { TajweedHighlight } from './TajweedHighlight.jsx';
+import { HeartLabSort } from './HeartLabSort.jsx';
 
 const MAP = {
   choose_meaning: ChooseMeaning,
@@ -20,6 +21,8 @@ const MAP = {
   recite: Recite,
   moral_scenario: MoralScenario,
   tajweed_highlight: TajweedHighlight,
+  // New Heart Lab sorting question (Gratitude Compass — Heart Lens).
+  heart_lab_sort: HeartLabSort,
 };
 
 export function QuestionRenderer({ question, onAnswer, locked }) {
@@ -31,5 +34,11 @@ export function QuestionRenderer({ question, onAnswer, locked }) {
       </div>
     );
   }
-  return <Comp question={question} onAnswer={onAnswer} locked={locked} />;
+  // CRITICAL: keying on the question id forces React to unmount + remount the
+  // child when the parent advances to the next question. Without this, the
+  // child component instance is reused across questions and its local
+  // useState (e.g. `selected`) leaks from the previous question — so the
+  // same option index stays highlighted on the next question.
+  const key = question.id || `${question.type}:${question.prompt || ''}`;
+  return <Comp key={key} question={question} onAnswer={onAnswer} locked={locked} />;
 }
