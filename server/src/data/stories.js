@@ -3,7 +3,55 @@
 // prose, and an end-of-story activity.
 
 export const STORIES = [
+
+    {
+    id: 'blessings_next_door',
+    title: 'Uncountable',
+    surah_reference: '14:34',
+    summary:
+      'Two neighbors learn to notice Allah’s blessings instead of only wishing for what others have.',
+    cover: '/stories/blessings-next-door/page-1.png',
+    cover_emotion: 'smile',
+    theme: 'gratitude',
+    pages: [
+      { page: 1, image: '/stories/blessings-next-door/page-1.png' },
+      { page: 2, image: '/stories/blessings-next-door/page-2.png' },
+      { page: 3, image: '/stories/blessings-next-door/page-3.png' },
+      { page: 4, image: '/stories/blessings-next-door/page-4.png' },
+      { page: 5, image: '/stories/blessings-next-door/page-5.png' },
+      { page: 6, image: '/stories/blessings-next-door/page-6.png' },
+      { page: 7, image: '/stories/blessings-next-door/page-7.png' },
+      { page: 8, image: '/stories/blessings-next-door/page-8.png' },
+      { page: 9, image: '/stories/blessings-next-door/page-9.png' },
+      { page: 10, image: '/stories/blessings-next-door/page-10.png' },
+      { page: 11, image: '/stories/blessings-next-door/page-11.png' },
+      { page: 12, image: '/stories/blessings-next-door/page-12.png' },
+      { page: 13, image: '/stories/blessings-next-door/page-13.png' },
+    ],
+    activity: {
+      type: 'order_events',
+      prompt: 'Put the story in the right order',
+      items: [
+        { id: 'e1', text: 'Omar and Yousef were neighbors and friends' },
+        { id: 'e2', text: 'Omar wished he had siblings' },
+        { id: 'e3', text: 'Yousef wished his leg did not hurt' },
+        { id: 'e4', text: 'The families talked about Allah’s blessings' },
+        { id: 'e5', text: 'The boys thanked Allah for what they had' },
+      ],
+      lesson_question: {
+        prompt: 'What is the main lesson of this story?',
+        options: [
+          'Always compare yourself to others',
+          'Notice and thank Allah for your blessings',
+          'Only be happy if you have everything',
+          'Stop being friends with people who have different blessings',
+        ],
+        correctIndex: 1,
+      },
+    },
+  },
   {
+    
     id: 'story_owners_garden',
     title: 'The Owners of the Garden',
     surah_reference: '68:17–33',
