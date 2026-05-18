@@ -5,6 +5,8 @@ import { useProgress } from '../context/ProgressContext.jsx';
 import { Character } from '../components/Character.jsx';
 import { SpeechBubble } from '../components/SpeechBubble.jsx';
 import { SectionCompass } from '../components/SectionCompass.jsx';
+import { playVoice } from "../lib/tts";
+
 
 // Compute which compass lenses have been unlocked, given the user's set
 // of completed quest ids. A lens unlocks when its corresponding quest
@@ -64,6 +66,13 @@ export default function HomePage() {
 
   return (
     <div className="px-4 py-4 pb-32 max-w-screen-md mx-auto flex flex-col gap-6">
+    <button
+  onClick={() =>
+    playVoice("Assalamu alaikum! Let’s begin today’s lesson.", "girl")
+  }
+>
+  🔊 Listen
+</button>
       {/* Daily quest banner */}
       {daily && (
         <div className="bg-gradient-to-br from-brand-500 to-brand-600 rounded-3xl p-5 text-white shadow-card">
@@ -128,6 +137,7 @@ export default function HomePage() {
         </Link>
       )}
     </div>
+    
   );
 }
 

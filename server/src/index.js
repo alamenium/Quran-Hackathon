@@ -19,6 +19,8 @@ import classesRouter from './routes/classes.js';
 import compassRouter from './routes/compass.js';
 import { asrHealth } from './services/recitation.js';
 
+import ttsRoutes from "./routes/tts.js";
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -57,6 +59,7 @@ app.use('/api/diagnostic', diagnosticRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/classes', classesRouter);
 app.use('/api/compass', compassRouter);
+app.use("/api/tts", ttsRoutes);
 
 // Serve client build in production (single-deploy mode)
 const clientDist = path.resolve(__dirname, '../../client/dist');
@@ -96,3 +99,4 @@ app.listen(PORT, async () => {
   }
   console.log('');
 });
+
