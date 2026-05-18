@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { Character } from '../components/Character.jsx';
@@ -18,10 +18,74 @@ export default function StoryPage() {
   const [activityResults, setActivityResults] = useState({ order: null, lesson: null });
   const [activityFeedback, setActivityFeedback] = useState(null);
   const [error, setError] = useState(null);
+  const [isReading, setIsReading] = useState(false);
+const audioRef = useRef(null);
+  
+
+const stopAudio = () => {
+  if (audioRef.current) {
+    audioRef.current.pause();
+    audioRef.current.currentTime = 0;
+    audioRef.current = null;
+  }
+};
+
+const playAudioForPage = (pageIndex) => {
+  const currentPage = story?.pages?.[pageIndex];
+
+  if (!currentPage?.audio) {
+    console.error('No audio found for page:', pageIndex + 1);
+    return;
+  }
+
+  stopAudio();
+
+  const audio = new Audio(currentPage.audio);
+  audio.volume = 1;
+  audioRef.current = audio;
+
+  audio.onended = () => {
+    audioRef.current = null;
+
+    if (pageIndex < story.pages.length - 1) {
+      setPage((current) => (current === pageIndex ? current + 1 : current));
+    } else {
+      setIsReading(false);
+    }
+  };
+
+  audio.play().catch((error) => {
+    console.error('Story audio failed:', error);
+    setIsReading(false);
+  });
+};
+
+const toggleReading = () => {
+  if (isReading) {
+    setIsReading(false);
+    stopAudio();
+  } else {
+    setIsReading(true);
+    playAudioForPage(page);
+  }
+};
 
   useEffect(() => {
-    api.story(id).then((d) => setStory(d.story)).catch((err) => setError(err.message));
-  }, [id]);
+  api.story(id).then((d) => setStory(d.story)).catch((err) => setError(err.message));
+}, [id]);
+
+useEffect(() => {
+  if (!isReading || activityIdx !== null || !story) return;
+
+  if (!audioRef.current) {
+    playAudioForPage(page);
+  }
+
+  return () => {
+    stopAudio();
+  };
+}, [page, activityIdx]);
+
 
   if (error) {
     return (
@@ -41,22 +105,26 @@ export default function StoryPage() {
   const reachedActivity = activityIdx !== null;
 
   const next = () => {
-    if (!onLastPage) {
-      setPage(page + 1);
-    } else if (!reachedActivity) {
-      setActivityIdx(0);
-    }
-  };
+  if (!onLastPage) {
+    setPage(page + 1);
+  } else if (!reachedActivity) {
+    setIsReading(false);
+    stopAudio();
+    setActivityIdx(0);
+  }
+};
 
   const back = () => {
-    if (reachedActivity) {
-      setActivityIdx(null);
-    } else if (page > 0) {
-      setPage(page - 1);
-    } else {
-      navigate('/library');
-    }
-  };
+  if (reachedActivity) {
+    setActivityIdx(null);
+  } else if (page > 0) {
+    setPage(page - 1);
+  } else {
+    setIsReading(false);
+    stopAudio();
+    navigate('/library');
+  }
+};
 
   if (!reachedActivity) {
   const p = story.pages[page];
@@ -78,12 +146,24 @@ export default function StoryPage() {
 
       <div className="flex-1 flex items-center justify-center px-4 py-4">
         {p.image ? (
-          <img
-            src={p.image}
-            alt={`${story.title} page ${page + 1}`}
-            className="w-full max-w-6xl h-[calc(100vh-150px)] object-contain rounded-3xl shadow-card"
-          />
-        ) : (
+  <div className="relative w-full max-w-6xl">
+    <img
+      src={p.image}
+      alt={`${story.title} page ${page + 1}`}
+      className="w-full h-[calc(100vh-150px)] object-contain rounded-3xl shadow-card"
+    />
+
+    {p.audio && (
+      <button
+  type="button"
+  onClick={toggleReading}
+  className="absolute bottom-5 right-5 bg-white text-ink font-extrabold px-5 py-3 rounded-2xl shadow-card border-2 border-accent-gold/40"
+>
+  {isReading ? '⏹ Stop reading' : '🔊 Read to me'}
+</button>
+    )}
+  </div>
+) : (
           <div className="flex flex-col items-center px-5 py-6 max-w-screen-md mx-auto w-full">
             <img
               src={charSrc}
