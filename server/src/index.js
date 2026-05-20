@@ -17,6 +17,8 @@ import diagnosticRouter from './routes/diagnostic.js';
 import aiRouter from './routes/ai.js';
 import classesRouter from './routes/classes.js';
 import compassRouter from './routes/compass.js';
+import contentRouter from './routes/content.js';
+import userRouter from './routes/user.js';
 import { asrHealth } from './services/recitation.js';
 
 import ttsRoutes from "./routes/tts.js";
@@ -59,6 +61,8 @@ app.use('/api/diagnostic', diagnosticRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/classes', classesRouter);
 app.use('/api/compass', compassRouter);
+app.use('/api/content', contentRouter);
+app.use('/api/user', userRouter);
 app.use("/api/tts", ttsRoutes);
 
 // Serve client build in production (single-deploy mode)

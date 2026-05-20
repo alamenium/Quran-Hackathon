@@ -51,21 +51,54 @@ router.post('/placement', async (req, res, next) => {
 });
 
 // POST /api/progress/quest-complete — mark a quest as completed
+//
+// Scoring formula (per brief PART 7):
+//   baseXp           = quest.xp || 10
+//   accuracyBonus    = round(accuracy * 10)
+//   reflectionBonus  = +3 if reflectionSubmitted
+//   listeningBonus   = +2 if listened
+//   perfectBonus     = +5 if mistakes.length === 0
+//   reviewBonus      = +5 if reviewedMistakes
+//   finalXp          = sum above
 router.post('/quest-complete', async (req, res, next) => {
   try {
-    const { questId, score, mistakes = [], reflections = [] } = req.body;
+    const {
+      questId,
+      score,
+      mistakes = [],
+      reflections = [],
+      accuracy,            // 0..1
+      listened = false,
+      reviewedMistakes = false,
+    } = req.body;
     const ctx = findQuest(questId);
     if (!ctx) return res.status(404).json({ error: 'Quest not found' });
 
+    // Compute scoring inputs.
+    const baseXp = ctx.quest.xp || 10;
+    const acc = typeof accuracy === 'number'
+      ? Math.max(0, Math.min(1, accuracy))
+      : typeof score === 'number' ? Math.max(0, Math.min(1, score / 100)) : 1;
+    const accuracyBonus = Math.round(acc * 10);
+    const reflectionBonus = reflections.length > 0 ? 3 : 0;
+    const listeningBonus = listened ? 2 : 0;
+    const perfectBonus = mistakes.length === 0 ? 5 : 0;
+    const reviewBonus = reviewedMistakes ? 5 : 0;
+    const finalXp =
+      baseXp + accuracyBonus + reflectionBonus + listeningBonus +
+      perfectBonus + reviewBonus;
+
     const user = await updateUser(userId(req), (u) => {
       // XP
-      u.xp += ctx.quest.xp || 10;
+      u.xp += finalXp;
       // completed list
       const existing = u.completedQuests.find((q) => q.questId === questId);
       const record = {
         questId,
         completedAt: new Date().toISOString(),
-        score: typeof score === 'number' ? score : 100,
+        score: typeof score === 'number' ? score : Math.round(acc * 100),
+        xpAwarded: finalXp,
+        breakdown: { baseXp, accuracyBonus, reflectionBonus, listeningBonus, perfectBonus, reviewBonus },
       };
       if (existing) Object.assign(existing, record);
       else u.completedQuests.push(record);
@@ -73,11 +106,12 @@ router.post('/quest-complete', async (req, res, next) => {
       for (const m of mistakes) {
         u.mistakes.push({ ...m, questId, ts: new Date().toISOString() });
       }
-      // reflections
+      // reflections (kept inline for backwards compatibility; the new
+      // /api/user/notes endpoint is preferred for new code)
       for (const r of reflections) {
         u.reflections.push({ ...r, questId, ts: new Date().toISOString() });
       }
-      // streak
+      // streak — quest completion is meaningful daily activity
       tickStreak(u);
       // badges (simple rules)
       const bset = new Set(u.badges);
@@ -98,7 +132,10 @@ router.post('/quest-complete', async (req, res, next) => {
       return u;
     });
 
-    res.json({ user });
+    res.json({
+      user,
+      xp: { awarded: finalXp, breakdown: { baseXp, accuracyBonus, reflectionBonus, listeningBonus, perfectBonus, reviewBonus } },
+    });
   } catch (err) {
     next(err);
   }

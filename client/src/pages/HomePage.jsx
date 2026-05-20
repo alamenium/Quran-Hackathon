@@ -105,6 +105,32 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* Quick links — Compass, Listen, Tutor remain reachable from here
+          even though they are no longer in the bottom nav. */}
+      <div className="grid grid-cols-3 gap-2">
+        <Link
+          to="/compass"
+          className="bg-white border-2 border-gray-100 rounded-2xl p-3 text-center flex flex-col items-center gap-1 hover:border-brand-500/50 transition"
+        >
+          <span className="text-2xl" aria-hidden>🧭</span>
+          <span className="text-xs font-extrabold text-ink">Compass</span>
+        </Link>
+        <Link
+          to="/listen"
+          className="bg-white border-2 border-gray-100 rounded-2xl p-3 text-center flex flex-col items-center gap-1 hover:border-brand-500/50 transition"
+        >
+          <span className="text-2xl" aria-hidden>🎧</span>
+          <span className="text-xs font-extrabold text-ink">Listen</span>
+        </Link>
+        <Link
+          to="/tutor"
+          className="bg-white border-2 border-gray-100 rounded-2xl p-3 text-center flex flex-col items-center gap-1 hover:border-brand-500/50 transition"
+        >
+          <span className="text-2xl" aria-hidden>💬</span>
+          <span className="text-xs font-extrabold text-ink">Tutor</span>
+        </Link>
+      </div>
+
       {/* Sections */}
       {roadmap.sections.map((section) => (
         <SectionBlock

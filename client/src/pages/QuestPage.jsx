@@ -20,6 +20,7 @@ import { VerseCard } from '../components/VerseCard.jsx';
 import { Character } from '../components/Character.jsx';
 import { AudioButton } from '../components/AudioButton.jsx';
 import { SectionCompass } from '../components/SectionCompass.jsx';
+import { SourceBadge, SourceCard } from '../components/SourceBadge.jsx';
 
 // Build a flat array of steps from quest data.
 function buildSteps(quest) {
@@ -74,6 +75,11 @@ function buildSteps(quest) {
     steps.push({ type: 'reflection', prompt: quest.reflection.prompt, options: quest.reflection.options, allow_custom: quest.reflection.allow_custom });
   }
 
+  // Step 8 (optional): Related Ayahs — only present on quran.ai-powered quests.
+  if (quest.related_ayahs?.length) {
+    steps.push({ type: 'related_ayahs', items: quest.related_ayahs });
+  }
+
   return steps;
 }
 
@@ -93,12 +99,18 @@ export default function QuestPage() {
   const [gradableCount, setGradableCount] = useState(0);
   const [completed, setCompleted] = useState(false);
   const [aiSummary, setAiSummary] = useState(null);
+  // Lesson hydration from the Quran Foundation Content API (with local
+  // fallback). Populated for the quest's primary verse.
+  const [hydratedLesson, setHydratedLesson] = useState(null);
+  // Whether the listener finished the listen step (drives listeningBonus).
+  const [listened, setListened] = useState(false);
 
   useEffect(() => {
     let mounted = true;
     setData(null); setError(null); setPos(0); setFeedback(null);
     setCollectedMistakes([]); setCollectedReflections([]);
     setScore(0); setCompleted(false); setAiSummary(null);
+    setHydratedLesson(null); setListened(false);
 
     api.quest(id).then((d) => {
       if (!mounted) return;
@@ -107,9 +119,19 @@ export default function QuestPage() {
       setSteps(built);
       // count gradable steps (questions, moral scenarios — not listen/understand/words/tajweed/reflect)
       const gradable = built.filter(s =>
-        !['listen','understand','words','tajweed_highlight','reflection'].includes(s.type)
+        !['listen','understand','words','tajweed_highlight','reflection','related_ayahs'].includes(s.type)
       ).length;
       setGradableCount(gradable);
+
+      // Hydrate the primary verse through the Content API. If it's reachable
+      // we use the live translation/tafsir/audio; otherwise the route falls
+      // back to local content and we still get a valid lesson object.
+      const primary = d.quest.verses?.[0]?.verse_key;
+      if (primary) {
+        api.content.lesson(primary).then((lesson) => {
+          if (mounted) setHydratedLesson(lesson);
+        }).catch(() => { /* graceful — VerseCard still has local data */ });
+      }
     }).catch((err) => mounted && setError(err.message));
     return () => { mounted = false; };
   }, [id]);
@@ -122,13 +144,29 @@ export default function QuestPage() {
 
   const current = steps[pos];
   const total = steps.length;
-  const isPassive = ['listen','understand','words'].includes(current?.type);
+  const isPassive = ['listen','understand','words','related_ayahs'].includes(current?.type);
 
   const handleAnswer = (result) => {
+    // Listen step continued — record a reading-session and set the listened
+    // flag for the scoring formula.
+    if (result.listenedAyah) {
+      setListened(true);
+      api.user
+        .startReadingSession({ ayahKey: result.listenedAyah, durationSeconds: 30 })
+        .catch(() => { /* non-blocking */ });
+    }
+
     // Reflections and passive steps — just advance
     if (result.noFeedback || isPassive) {
       if (result.reflection) {
         setCollectedReflections(r => [...r, { prompt: current.prompt, text: result.reflection.text }]);
+        // Persist reflection as a Note via the user-progress provider
+        // (QF Notes API when configured, local store otherwise).
+        const verseKey = data?.quest?.verses?.[0]?.verse_key;
+        const tags = [data?.quest?.theme || 'reflection'];
+        api.user
+          .addNote({ ayahKey: verseKey, body: result.reflection.text, tags })
+          .catch(() => { /* non-blocking */ });
       }
       advance();
       return;
@@ -160,10 +198,20 @@ export default function QuestPage() {
 
   const finalize = async () => {
     try {
+      // Compute accuracy locally and forward the scoring inputs the new
+      // server-side formula needs (PART 7 of the brief).
+      const totalGradable = Math.max(gradableCount, 1);
+      const wrong = collectedMistakes.length;
+      const accuracy = Math.max(0, (totalGradable - wrong) / totalGradable);
+
       await completeQuest({
         questId: data.quest.id,
         score,
+        mistakes: collectedMistakes,
         reflections: collectedReflections,
+        accuracy,
+        listened,
+        reviewedMistakes: false,
       });
       // If this was the final quest of the Gratitude Compass Mission,
       // save the "My Quran Compass — Gratitude" card to localStorage so
@@ -196,6 +244,29 @@ export default function QuestPage() {
         });
         setAiSummary(res.summary);
       } catch { /* non-fatal */ }
+
+      // If this quest was source-grounded via quran.ai, stash a small
+      // lesson-context object so the AI Tutor can answer using the
+      // actual ayah/translation/tafsir of the lesson the child just
+      // finished. Tutor reads this from localStorage if no other
+      // lesson context is provided. Light-touch grounding only —
+      // the tutor's fatwa refusal still applies.
+      if (data.quest.source?.generatedWith === 'quran.ai') {
+        try {
+          const ctx = {
+            questId: data.quest.id,
+            title: data.quest.title,
+            theme: data.quest.theme,
+            verseKey: data.quest.verses?.[0]?.verse_key,
+            verseText: data.quest.verses?.[0]?.text_uthmani,
+            translation: data.quest.verses?.[0]?.translation,
+            tafsirSimple: data.quest.verses?.[0]?.tafsir_simple,
+            source: data.quest.source,
+            savedAt: new Date().toISOString(),
+          };
+          localStorage.setItem('aq_last_lesson_context', JSON.stringify(ctx));
+        } catch { /* non-fatal */ }
+      }
     } catch (err) { console.error('complete quest failed', err); }
     setCompleted(true);
   };
@@ -212,6 +283,22 @@ export default function QuestPage() {
 
       {/* Step label */}
       <StepLabel type={current?.type} />
+
+      {/* Content API source banner — shows where the runtime Quran content
+          for this lesson is coming from. Live = Quran Foundation v4.
+          Fallback = local cache (still authentic, just not from the network). */}
+      {hydratedLesson && (
+        <div className="px-4 -mt-2 mb-2">
+          <div className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft inline-flex items-center gap-1.5 bg-white border border-gray-100 rounded-full px-2.5 py-1">
+            <span className="text-brand-500" aria-hidden>📡</span>
+            <span>
+              {hydratedLesson.source?.fallbackUsed
+                ? 'Source: local cache (Content API unavailable)'
+                : `Source: ${hydratedLesson.source?.provider}`}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Compass header — shown only for quests inside a themed section
           that defines a compass (currently: Gratitude Garden). One petal
@@ -252,7 +339,7 @@ function StepRenderer({ step, onAnswer, locked }) {
     return (
       <div className="flex flex-col gap-4">
         <VerseCard verse={step.verse} showTafsir={false} />
-        <button type="button" onClick={() => onAnswer({ correct: true, noFeedback: true })} className="duo-btn-primary">
+        <button type="button" onClick={() => onAnswer({ correct: true, noFeedback: true, listenedAyah: step.verse?.verse_key })} className="duo-btn-primary">
           Continue
         </button>
       </div>
@@ -294,7 +381,55 @@ function StepRenderer({ step, onAnswer, locked }) {
     );
   }
 
-  // --- Allah's Name card (Gratitude Compass — Quest 4) ---
+  // --- Related Ayahs step (quran.ai-powered quests) ---
+  if (step.type === 'related_ayahs') {
+    return (
+      <div className="flex flex-col gap-4">
+        <div>
+          <h2 className="text-lg font-extrabold text-ink">Explore More</h2>
+          <p className="text-sm text-ink-soft">
+            More ayahs from quran.ai that connect to this lesson.
+          </p>
+        </div>
+        {step.items.map((item, i) => (
+          <div
+            key={i}
+            className="bg-white border-2 border-brand-500/20 rounded-2xl p-4"
+          >
+            <div className="flex items-baseline justify-between mb-2">
+              <div className="text-xs uppercase font-extrabold text-brand-600 tracking-wide">
+                {item.verse_key}
+              </div>
+              <SourceBadge source={item.verse?.source} />
+            </div>
+            {item.verse?.text_uthmani && (
+              <div
+                className="font-arabic text-xl text-ink mb-2 leading-loose"
+                dir="rtl"
+              >
+                {item.verse.text_uthmani}
+              </div>
+            )}
+            {item.verse?.translation && (
+              <div className="text-sm text-ink italic mb-1">
+                "{item.verse.translation}"
+              </div>
+            )}
+            {item.note && (
+              <div className="text-xs text-ink-soft mt-1">{item.note}</div>
+            )}
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={() => onAnswer({ correct: true, noFeedback: true })}
+          className="duo-btn-primary"
+        >
+          Continue
+        </button>
+      </div>
+    );
+  }
   if (step.type === 'allah_name') {
     return (
       <div className="flex flex-col gap-4">
@@ -370,6 +505,7 @@ const STEP_LABELS = {
   tajweed_highlight: { label: 'Step 4 — Tajweed', color: '#CE82FF' },
   moral_scenario: { label: 'Step 6 — Moral Scenario', color: '#FF9600' },
   reflection: { label: 'Step 7 — Reflect', color: '#CE82FF' },
+  related_ayahs: { label: 'Explore More — quran.ai', color: '#58CC02' },
 };
 
 function StepLabel({ type }) {
@@ -430,6 +566,14 @@ function CompleteScreen({ quest, score, summary, onDone }) {
       <div className="bg-white border-2 border-gray-100 rounded-2xl p-4 text-sm text-ink text-left max-w-sm w-full">
         {summary || defaultMsg}
       </div>
+      {/* Source card — only shows when this quest was generated using the
+          quran.ai content pipeline. Adds judging proof and shows the child
+          the lesson was grounded in real sources, not invented. */}
+      <SourceCard
+        source={quest.source}
+        primaryAyah={quest.source?.primaryAyah || quest.verses?.[0]?.verse_key}
+        theme={quest.theme}
+      />
       <button onClick={onDone} className="duo-btn-primary w-full max-w-sm">Continue</button>
     </div>
   );

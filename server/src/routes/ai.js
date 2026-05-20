@@ -62,11 +62,53 @@ router.post('/quiz', async (req, res, next) => {
 
 // POST /api/ai/tutor
 // body: { userMessage, lessonContext, conversationHistory }
+//
+// Per the brief (PART 9): if the lesson has an ayahKey but no fetched ayah
+// text, ask the backend to hydrate it via the Content API (with local
+// fallback) before passing context to Gemini. This keeps the tutor
+// answering from real source material, never from memory.
 router.post('/tutor', async (req, res, next) => {
   try {
-    const { userMessage, lessonContext, conversationHistory } = req.body || {};
+    const { userMessage, conversationHistory } = req.body || {};
+    let { lessonContext } = req.body || {};
     if (!userMessage?.trim()) {
       return res.status(400).json({ error: 'userMessage required' });
+    }
+    if (lessonContext?.ayahKey && !lessonContext.verseText) {
+      try {
+        // Inline hydration — re-use the same helper as the /content route.
+        const { isConfigured, getVerseByKey } = await import(
+          '../services/quranFoundationContentApi.js'
+        );
+        if (isConfigured()) {
+          const v = await getVerseByKey(lessonContext.ayahKey);
+          if (v) {
+            lessonContext = {
+              ...lessonContext,
+              verseText: v.text_uthmani,
+              translation:
+                lessonContext.translation ||
+                (v.translations && v.translations[0]?.text) ||
+                null,
+              hydratedFrom: 'Quran Foundation Content API v4',
+            };
+          }
+        }
+        // Local fallback
+        if (!lessonContext.verseText) {
+          const local = getVerse(lessonContext.ayahKey);
+          if (local) {
+            lessonContext = {
+              ...lessonContext,
+              verseText: local.text_uthmani,
+              translation: lessonContext.translation || local.translation,
+              hydratedFrom: 'local-cache',
+            };
+          }
+        }
+      } catch (err) {
+        console.warn('[ai/tutor] hydration failed:', err.message);
+      }
     }
     const result = await gemini.tutorAnswer({
       userMessage,

@@ -1,4 +1,9 @@
 // AyahQuest curriculum — Sections → Units → Lessons.
+import {
+  QURAN_AI_GRATITUDE_QUEST_14_34,
+  QURAN_AI_SECTIONS,
+} from './quranAiContentPack.js';
+//
 //
 // Each lesson follows the 7-step flow defined in the product plan:
 //   1. listen        – hear the ayah with word-by-word highlighting
@@ -281,6 +286,8 @@ export const SECTIONS = [
             },
             asbab_al_nuzul: null,
           },
+          // Source-grounded gratitude quest — added by the quran.ai pipeline.
+          QURAN_AI_GRATITUDE_QUEST_14_34,
         ],
       },
       // -------------------------------------------------------------------
@@ -965,6 +972,14 @@ export const SECTIONS = [
     ],
   },
 ];
+
+// ---------------------------------------------------------------------------
+// quran.ai content pack — append source-grounded sections.
+// "Who Allah Loves" and "Quran Wonders / Signs Detective".
+// ---------------------------------------------------------------------------
+for (const s of QURAN_AI_SECTIONS) {
+  if (!SECTIONS.some((existing) => existing.id === s.id)) SECTIONS.push(s);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers

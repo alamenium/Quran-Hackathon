@@ -533,6 +533,30 @@ export const WORDS = [
   },
 ];
 
+// ---------------------------------------------------------------------------
+// quran.ai content pack — verses, surahs, and word cards generated using
+// the quran.ai MCP connector during development. Cached locally so the
+// runtime app does NOT need live quran.ai access.
+// ---------------------------------------------------------------------------
+import {
+  QURAN_AI_VERSES,
+  QURAN_AI_SURAHS,
+  QURAN_AI_WORDS,
+} from './quranAiContentPack.js';
+
+// Merge — pre-existing entries win on key conflict (so we never silently
+// overwrite the Saheeh International translations already in this file).
+for (const [k, v] of Object.entries(QURAN_AI_VERSES)) {
+  if (!VERSES[k]) VERSES[k] = v;
+}
+for (const [k, v] of Object.entries(QURAN_AI_SURAHS)) {
+  if (!SURAHS[k]) SURAHS[k] = v;
+}
+// Word cards are pushed (existing words keep their ids; new cards added).
+for (const w of QURAN_AI_WORDS) {
+  if (!WORDS.some((existing) => existing.id === w.id)) WORDS.push(w);
+}
+
 export function getVerse(verseKey) {
   return VERSES[verseKey] || null;
 }

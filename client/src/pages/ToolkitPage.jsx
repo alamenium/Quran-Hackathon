@@ -4,6 +4,7 @@ import { api } from '../lib/api.js';
 import { Character } from '../components/Character.jsx';
 import { VerseCard } from '../components/VerseCard.jsx';
 import { AudioButton } from '../components/AudioButton.jsx';
+import { SourceBadge } from '../components/SourceBadge.jsx';
 
 const TABS = [
   { id: 'compass', label: 'Compass cards', icon: '🧭' },
@@ -282,7 +283,10 @@ function WordRow({ word, onAdd, onRemove }) {
   return (
     <div className="bg-white border-2 border-gray-100 rounded-2xl p-3 flex items-center gap-3">
       <div className="flex-1">
-        <div className="font-arabic text-2xl text-ink">{word.arabic}</div>
+        <div className="flex items-center gap-2">
+          <div className="font-arabic text-2xl text-ink">{word.arabic}</div>
+          <SourceBadge source={word.source} />
+        </div>
         <div className="text-xs text-ink-soft">
           {word.transliteration} — {word.meaning}
         </div>

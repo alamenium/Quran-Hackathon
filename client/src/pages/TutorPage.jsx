@@ -12,10 +12,31 @@ export default function TutorPage() {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [configured, setConfigured] = useState(null);
+  const [lessonContext, setLessonContext] = useState(null);
   const bottomRef = useRef(null);
 
   useEffect(() => {
     api.aiStatus().then(d => setConfigured(d.configured)).catch(() => setConfigured(false));
+    // Pick up a quran.ai-grounded lesson context written by QuestPage on
+    // lesson completion. If present, prepend a one-line system-style
+    // greeting so the child sees the tutor knows which lesson they're on.
+    try {
+      const raw = localStorage.getItem('aq_last_lesson_context');
+      if (raw) {
+        const ctx = JSON.parse(raw);
+        if (ctx?.source?.generatedWith === 'quran.ai') {
+          setLessonContext(ctx);
+          setMessages((m) => [
+            ...m,
+            {
+              role: 'assistant',
+              text: `I'll answer using the ayah and lesson sources in this quest (${ctx.title} · ${ctx.verseKey}). For rulings, please ask a qualified scholar.`,
+              grounded: true,
+            },
+          ]);
+        }
+      }
+    } catch { /* non-fatal */ }
   }, []);
 
   useEffect(() => {
@@ -31,7 +52,7 @@ export default function TutorPage() {
     setLoading(true);
     try {
       const history = messages.map(m => ({ role: m.role, text: m.text }));
-      const res = await api.tutorAsk(text, history);
+      const res = await api.tutorAsk(text, history, lessonContext);
       setMessages(m => [...m, { role: 'assistant', text: res.text, refused: res.refused }]);
     } catch (err) {
       setMessages(m => [...m, {

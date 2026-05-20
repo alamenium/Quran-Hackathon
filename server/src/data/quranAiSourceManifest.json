@@ -1,0 +1,274 @@
+{
+  "_comment": "Source manifest for content generated through quran.ai MCP. Every Quran-related item added by the quran.ai pipeline is recorded here so judges can verify it is source-grounded and not invented. Generated during development; the runtime app does NOT call quran.ai live.",
+  "generatedAt": "2026-05-19",
+  "pipeline": "quran.ai MCP (development-time only)",
+  "editions": {
+    "quranText": {
+      "id": "ar-simple-clean",
+      "description": "Canonical Arabic Quran text from quran.com / Quran Foundation",
+      "tool": "fetch_quran"
+    },
+    "translation": {
+      "id": "en-abdel-haleem",
+      "name": "The Qur'an",
+      "author": "Muhammad A. S. Abdel Haleem",
+      "tool": "fetch_translation",
+      "note": "Used for ALL new ayahs added by the quran.ai pipeline. Pre-existing ayahs in quranContent.js use Saheeh International phrasing and were not changed."
+    },
+    "tafsir": [
+      {
+        "id": "ar-muyassar",
+        "name": "التفسير الميسر",
+        "author": "مجمع الملك فهد لطباعة المصحف الشريف",
+        "language": "ar",
+        "description": "Committee-produced simplified Arabic tafsir, officially distributed with the Madinah mushaf. Neutral, mainstream Sunni interpretation. Concise.",
+        "tool": "fetch_tafsir"
+      },
+      {
+        "id": "ar-saadi",
+        "name": "تيسير الكريم الرحمن في تفسير كلام المنان",
+        "author": "عبد الرحمن بن ناصر السعدي",
+        "language": "ar",
+        "description": "Benefits-oriented tafsir extracting practical guidance from each passage. Educational (tarbawi) focus — well suited for child-friendly paraphrase.",
+        "tool": "fetch_tafsir"
+      }
+    ]
+  },
+  "toolsUsed": [
+    "fetch_grounding_rules",
+    "list_editions",
+    "search_quran",
+    "fetch_quran",
+    "fetch_translation",
+    "fetch_tafsir",
+    "fetch_word_morphology"
+  ],
+  "themes": [
+    {
+      "theme": "gratitude",
+      "section": "sec_gratitude (extension)",
+      "newAyahs": ["14:34"],
+      "preExistingAyahsUsed": ["14:7", "31:12"],
+      "note": "14:7 and 31:12 were already present and verified in earlier work; only 14:34 is newly added by the quran.ai pipeline."
+    },
+    {
+      "theme": "who_allah_loves",
+      "section": "sec_who_allah_loves (new)",
+      "newAyahs": ["3:134", "3:146", "3:159", "49:9"],
+      "selectionNote": "Brief listed 2:222, 3:134, 3:146, 3:159, 5:42, 49:9 as candidates. After fetching translations, 2:222 (mentions menstruation) and 5:42 (deals with judging hypocrites and unlawful gain) were excluded as not child-appropriate for ages 7+. Four clearly child-friendly 'Allah loves ___' verses retained."
+    },
+    {
+      "theme": "signs_in_creation",
+      "section": "sec_quran_wonders (new)",
+      "newAyahs": ["2:164", "3:190", "13:3", "16:12", "21:33", "30:22", "41:37", "45:5"],
+      "selectionNote": "All 8 candidate ayahs from the brief were verified and retained. Three mini-quests reference these ayahs."
+    },
+    {
+      "theme": "knowing_allah",
+      "section": "sec_knowing_allah (new in v3)",
+      "newAyahs": ["1:1", "67:14", "59:24"],
+      "preExistingAyahsUsed": ["1:1", "1:6"],
+      "selectionNote": "Knowing Allah Garden vertical slice. One quest per Name-of-Allah theme: 1:1 (Ar-Rahman, Ar-Rahim — Mercy), 67:14 (Al-Lateef, Al-Khabeer — Knowledge), 59:24 (Al-Khaliq, Al-Bari, Al-Musawwir — Creation). 1:1 reuses local dataset entry; 67:14 and 59:24 are new in v3. All three ayahs were re-verified through quran.ai in this iteration with fetch_quran (ar-simple-clean), fetch_translation (en-abdel-haleem), fetch_tafsir (ar-muyassar)."
+    }
+  ],
+  "ayahManifest": [
+    {
+      "ayah": "14:34",
+      "supports": "Gratitude — countless blessings",
+      "section": "sec_gratitude",
+      "quest": "q_grat_14_34_uncountable",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar", "ar-saadi"],
+      "morphologyCalls": ["fetch_word_morphology(14:34) — full ayah; نِعْمَة root ن ع م"],
+      "relatedAyahs": ["14:7", "31:12"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir", "fetch_word_morphology"]
+    },
+    {
+      "ayah": "3:134",
+      "supports": "Allah loves the doers of good (al-muhsineen)",
+      "section": "sec_who_allah_loves",
+      "quest": "q_wal_muhsineen",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar", "ar-saadi"],
+      "morphologyCalls": ["fetch_word_morphology(3:134, ٱلْمُحْسِنِينَ) — root ح س ن"],
+      "relatedAyahs": ["3:159", "49:9"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir", "fetch_word_morphology"]
+    },
+    {
+      "ayah": "3:146",
+      "supports": "Allah loves the steadfast (as-sabireen)",
+      "section": "sec_who_allah_loves",
+      "quest": "q_wal_sabireen",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar", "ar-saadi"],
+      "morphologyCalls": ["fetch_word_morphology(3:146, ٱلصَّـٰبِرِينَ) — root ص ب ر"],
+      "relatedAyahs": ["103:3"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir", "fetch_word_morphology"]
+    },
+    {
+      "ayah": "3:159",
+      "supports": "Allah loves those who put their trust in Him (al-mutawakkileen)",
+      "section": "sec_who_allah_loves",
+      "quest": "q_wal_mutawakkileen",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar", "ar-saadi"],
+      "morphologyCalls": ["fetch_word_morphology(3:159, ٱلْمُتَوَكِّلِينَ) — root و ك ل, form V"],
+      "relatedAyahs": ["3:134"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir", "fetch_word_morphology"]
+    },
+    {
+      "ayah": "49:9",
+      "supports": "Allah loves the even-handed (al-muqsiteen)",
+      "section": "sec_who_allah_loves",
+      "quest": "q_wal_muqsiteen",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar", "ar-saadi"],
+      "morphologyCalls": ["fetch_word_morphology(49:9, ٱلْمُقْسِطِينَ) — root ق س ط, form IV"],
+      "relatedAyahs": ["3:134"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir", "fetch_word_morphology"]
+    },
+    {
+      "ayah": "2:164",
+      "supports": "Many signs in creation for those who use their minds",
+      "section": "sec_quran_wonders",
+      "quest": "q_wonders_signs_detective",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": [],
+      "morphologyCalls": ["fetch_word_morphology(2:164, position 41) — لَءَايَـٰتٍ, root أ ي ي"],
+      "relatedAyahs": ["3:190", "45:5"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_word_morphology"]
+    },
+    {
+      "ayah": "3:190",
+      "supports": "Signs in heavens, earth, night and day",
+      "section": "sec_quran_wonders",
+      "quest": "q_wonders_signs_detective",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar", "ar-saadi"],
+      "morphologyCalls": ["fetch_word_morphology(3:190, لِّأُو۟لِى) — أولي الألباب, people of understanding"],
+      "relatedAyahs": ["2:164", "45:5"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir", "fetch_word_morphology"]
+    },
+    {
+      "ayah": "13:3",
+      "supports": "Earth, mountains, rivers, pairs of fruits",
+      "section": "sec_quran_wonders",
+      "quest": "q_wonders_match_sign",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar", "ar-saadi"],
+      "morphologyCalls": [],
+      "relatedAyahs": ["16:12", "21:33"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir"]
+    },
+    {
+      "ayah": "16:12",
+      "supports": "Night, day, sun, moon, stars subjected for our benefit",
+      "section": "sec_quran_wonders",
+      "quest": "q_wonders_match_sign",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": [],
+      "morphologyCalls": [],
+      "relatedAyahs": ["21:33", "41:37"],
+      "tools": ["fetch_quran", "fetch_translation"]
+    },
+    {
+      "ayah": "21:33",
+      "supports": "Sun and moon, each floating in its orbit",
+      "section": "sec_quran_wonders",
+      "quest": "q_wonders_match_sign",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": [],
+      "morphologyCalls": ["fetch_word_morphology(21:33, فَلَكٍ) — root ف ل ك, 'orbit'"],
+      "relatedAyahs": ["16:12", "41:37"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_word_morphology"]
+    },
+    {
+      "ayah": "30:22",
+      "supports": "Creation of heavens, earth; diversity of languages and colours",
+      "section": "sec_quran_wonders",
+      "quest": "q_wonders_what_i_noticed",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar", "ar-saadi"],
+      "morphologyCalls": ["fetch_word_morphology(30:22, أَلْسِنَتِكُمْ) — root ل س ن, 'languages/tongues'"],
+      "relatedAyahs": ["2:164"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir", "fetch_word_morphology"]
+    },
+    {
+      "ayah": "41:37",
+      "supports": "Night, day, sun, moon — worship the Creator, not the created",
+      "section": "sec_quran_wonders",
+      "quest": "q_wonders_signs_detective",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar", "ar-saadi"],
+      "morphologyCalls": [],
+      "relatedAyahs": ["21:33", "16:12"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir"]
+    },
+    {
+      "ayah": "45:5",
+      "supports": "Night, day, rain, winds — signs for those who use their reason",
+      "section": "sec_quran_wonders",
+      "quest": "q_wonders_what_i_noticed",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": [],
+      "morphologyCalls": [],
+      "relatedAyahs": ["2:164", "3:190"],
+      "tools": ["fetch_quran", "fetch_translation"]
+    },
+    {
+      "ayah": "1:1",
+      "supports": "Allah is Merciful — Ar-Rahman, Ar-Rahim",
+      "section": "sec_knowing_allah",
+      "quest": "q_knowing_merciful",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar"],
+      "morphologyCalls": [],
+      "relatedAyahs": ["67:14"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir"]
+    },
+    {
+      "ayah": "67:14",
+      "supports": "Allah Knows and Sees — Al-Lateef, Al-Khabeer",
+      "section": "sec_knowing_allah",
+      "quest": "q_knowing_aware",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar"],
+      "morphologyCalls": [],
+      "relatedAyahs": ["59:24"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir"]
+    },
+    {
+      "ayah": "59:24",
+      "supports": "Allah Creates and Shapes — Al-Khaliq, Al-Bari, Al-Musawwir",
+      "section": "sec_knowing_allah",
+      "quest": "q_knowing_creator",
+      "translationEdition": "en-abdel-haleem",
+      "tafsirEditions": ["ar-muyassar"],
+      "morphologyCalls": [],
+      "relatedAyahs": ["1:1", "67:14"],
+      "tools": ["fetch_quran", "fetch_translation", "fetch_tafsir"]
+    }
+  ],
+  "morphologyManifest": [
+    { "root": "ن ع م", "lemma": "نِعْمَة", "ayah": "14:34", "rootFrequency": 140, "verseFrequency": 128 },
+    { "root": "ح س ن", "lemma": "مُحْسِن", "ayah": "3:134", "rootFrequency": 194, "verseFrequency": 177, "form": "Form IV active participle" },
+    { "root": "ص ب ر", "lemma": "صَابِر", "ayah": "3:146", "rootFrequency": 103, "verseFrequency": 93, "form": "Form I active participle" },
+    { "root": "و ك ل", "lemma": "مُتَوَكِّل", "ayah": "3:159", "rootFrequency": 70, "verseFrequency": 61, "form": "Form V active participle" },
+    { "root": "ق س ط", "lemma": "مُقْسِط", "ayah": "49:9", "rootFrequency": 25, "verseFrequency": 22, "form": "Form IV active participle" },
+    { "root": "أ ي ي", "lemma": "آيَة", "ayah": "2:164", "rootFrequency": 382, "verseFrequency": 353, "meaning": "sign / token / verse" },
+    { "root": "ف ل ك", "lemma": "فَلَك", "ayah": "21:33", "rootFrequency": 25, "verseFrequency": 25, "meaning": "orbit / celestial sphere" },
+    { "root": "ل س ن", "lemma": "لِسَان", "ayah": "30:22", "rootFrequency": 25, "verseFrequency": 24, "meaning": "tongue / language" }
+  ],
+  "excludedAyahs": [
+    {
+      "ayah": "2:222",
+      "reason": "Translation mentions menstruation — not appropriate for the 7+ child audience even though it contains 'Allah loves those who turn to Him and those who keep themselves clean.'"
+    },
+    {
+      "ayah": "5:42",
+      "reason": "Translation deals with judging hypocrites and unlawful gain — context too complex for a child-friendly 'Allah loves the just' card. 49:9 covers al-muqsiteen with a clearer context."
+    }
+  ],
+  "groundingDisclosure": "All Quran-related content (Arabic text, translations, and the underlying tafsir paraphrased into child-friendly summaries) was fetched live from quran.ai during content authoring. The simplified explanations in quranAiContentPack.js are model paraphrases of the fetched ar-muyassar and ar-saadi tafsir, written for ages 7+ in plain English. They are NOT verbatim quotes of either tafsir. Following quran.ai's grounding rules, this synthesis is labeled as 'derived from fetched tafsir' rather than presented as direct scholarly quotation.",
+  "runtimeBehavior": "The app does NOT call quran.ai at runtime. All content is cached in quranAiContentPack.js for demo reliability. See docs/quran-ai-content-pipeline.md for how to regenerate the pack."
+}

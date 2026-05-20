@@ -44,6 +44,7 @@ export const api = {
   roadmap: () => request('/api/quests/roadmap'),
   daily: () => request('/api/quests/daily'),
   quest: (id) => request(`/api/quests/${id}`),
+  sourceManifest: () => request('/api/quests/source-manifest'),
   // Diagnostic
   diagnostic: () => request('/api/diagnostic'),
   scoreDiagnostic: (answers) =>
@@ -86,10 +87,10 @@ export const api = {
   asrStatus: () => request('/api/recitation/asr-status'),
   // AI tutor
   aiStatus: () => request('/api/ai/status'),
-  tutorAsk: (userMessage, conversationHistory) =>
+  tutorAsk: (userMessage, conversationHistory, lessonContext) =>
     request('/api/ai/tutor', {
       method: 'POST',
-      body: JSON.stringify({ userMessage, conversationHistory }),
+      body: JSON.stringify({ userMessage, conversationHistory, lessonContext }),
     }),
   lessonSummary: (payload) =>
     request('/api/ai/lesson-summary', {
@@ -142,4 +143,73 @@ export const api = {
   // Quran Compass missions
   compassMissions: () => request('/api/compass'),
   compassMission: (id) => request(`/api/compass/${encodeURIComponent(id)}`),
+
+  // --- Quran Foundation Content API ---------------------------------------
+  // Wrappers for /api/content/* (lesson hydration, chapters, audio, etc.)
+  content: {
+    status: () => request('/api/content/status'),
+    resources: () => request('/api/content/resources'),
+    chapters: () => request('/api/content/chapters'),
+    lesson: (ayahKey, opts = {}) => {
+      const qs = new URLSearchParams();
+      if (opts.translationId) qs.set('translationId', opts.translationId);
+      if (opts.tafsirId) qs.set('tafsirId', opts.tafsirId);
+      if (opts.reciterId) qs.set('reciterId', opts.reciterId);
+      const tail = qs.toString() ? `?${qs}` : '';
+      return request(`/api/content/lesson/${encodeURIComponent(ayahKey)}${tail}`);
+    },
+    audio: (ayahKey) => request(`/api/content/audio/${encodeURIComponent(ayahKey)}`),
+    page: (n) => request(`/api/content/page/${n}`),
+    juz: (n) => request(`/api/content/juz/${n}`),
+  },
+
+  // --- Quran Foundation User API (with local fallback) --------------------
+  // Wrappers for /api/user/* — same shape regardless of which provider is
+  // active server-side. See server/src/services/userProgressProvider.js.
+  user: {
+    status: () => request('/api/user/status'),
+    me: () => request('/api/user/me'),
+    preferences: () => request('/api/user/preferences'),
+    setPreferences: (patch) =>
+      request('/api/user/preferences', { method: 'POST', body: JSON.stringify(patch) }),
+    goals: () => request('/api/user/goals'),
+    setGoal: ({ type, target, unit }) =>
+      request('/api/user/goals', {
+        method: 'POST',
+        body: JSON.stringify({ type, target, unit }),
+      }),
+    bookmarks: () => request('/api/user/bookmarks'),
+    addBookmark: ({ ayahKey, chapterId, ayahNumber }) =>
+      request('/api/user/bookmarks', {
+        method: 'POST',
+        body: JSON.stringify({ ayahKey, chapterId, ayahNumber }),
+      }),
+    removeBookmark: (id) =>
+      request(`/api/user/bookmarks/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+    notes: () => request('/api/user/notes'),
+    addNote: ({ ayahKey, body, tags }) =>
+      request('/api/user/notes', {
+        method: 'POST',
+        body: JSON.stringify({ ayahKey, body, tags }),
+      }),
+    startReadingSession: ({ ayahKey, durationSeconds }) =>
+      request('/api/user/reading-sessions', {
+        method: 'POST',
+        body: JSON.stringify({ ayahKey, durationSeconds }),
+      }),
+    activityDays: () => request('/api/user/activity-days'),
+    streaks: () => request('/api/user/streaks'),
+    collections: () => request('/api/user/collections'),
+    createCollection: (name) =>
+      request('/api/user/collections', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+    tags: () => request('/api/user/tags'),
+    createTag: (name) =>
+      request('/api/user/tags', {
+        method: 'POST',
+        body: JSON.stringify({ name }),
+      }),
+  },
 };

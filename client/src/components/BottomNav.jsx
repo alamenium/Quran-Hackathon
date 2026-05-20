@@ -1,12 +1,15 @@
 import { NavLink } from 'react-router-dom';
 
+// 5-tab nav per the brief (PART 8):
+//   Learn / Games / Recite / Library / Profile.
+// Compass, Listen, and Tutor remain reachable from Home tiles and Profile
+// links — we did not delete any routes. Recitation is still under Recite.
 const items = [
   { to: '/', label: 'Learn', icon: '🏠' },
-  { to: '/compass', label: 'Compass', icon: '🧭' },
+  { to: '/toolkit', label: 'Games', icon: '🎮' },
   { to: '/classes', label: 'Recite', icon: '🎤' },
-  { to: '/library', label: 'Stories', icon: '📖' },
-  { to: '/listen', label: 'Listen', icon: '🎧' },
-  { to: '/toolkit', label: 'Toolkit', icon: '🎒' },
+  { to: '/library', label: 'Library', icon: '📖' },
+  { to: '/profile', label: 'Profile', icon: '👤' },
 ];
 
 export function BottomNav() {
@@ -15,7 +18,7 @@ export function BottomNav() {
       className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-100"
       style={{ paddingBottom: 'var(--safe-bottom)' }}
     >
-      <ul className="grid grid-cols-6 max-w-screen-md mx-auto">
+      <ul className="grid grid-cols-5 max-w-screen-md mx-auto">
         {items.map((it) => (
           <li key={it.to}>
             <NavLink

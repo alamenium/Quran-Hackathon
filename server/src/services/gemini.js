@@ -142,8 +142,17 @@ export async function tutorAnswer({ userMessage, lessonContext, conversationHist
     };
   }
 
+  const groundedNote =
+    lessonContext?.source?.generatedWith === 'quran.ai'
+      ? `\nNote: This lesson's Quran content is source-grounded via quran.ai (translation: ${
+          lessonContext.source.translationEdition || 'en-abdel-haleem'
+        }; tafsir basis: ${
+          (lessonContext.source.tafsirSources || []).join(', ') || 'n/a'
+        }). When answering, you may say "I'll answer using the ayah and lesson sources in this quest." Do NOT invent new ayah references or new tafsir — only use the lesson context above.`
+      : '';
+
   const contextBlock = lessonContext
-    ? `Current lesson context:\n${JSON.stringify(lessonContext, null, 2)}`
+    ? `Current lesson context:\n${JSON.stringify(lessonContext, null, 2)}${groundedNote}`
     : 'No specific lesson context provided.';
 
   // Build conversation history for Gemini multi-turn.
