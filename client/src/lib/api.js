@@ -19,7 +19,11 @@ async function request(path, opts = {}) {
     'x-user-id': userId(),
     ...(opts.headers || {}),
   };
-  const res = await fetch(BASE + path, { ...opts, headers });
+  const res = await fetch(BASE + path, {
+    ...opts,
+    headers,
+    credentials: 'include', // required for the httpOnly session cookie
+  });
   if (!res.ok) {
     let msg = `Request failed (${res.status})`;
     try {
@@ -140,9 +144,15 @@ export const api = {
   // Classes (recitation)
   classes: () => request('/api/classes'),
   class: (id) => request(`/api/classes/${encodeURIComponent(id)}`),
+
   // Quran Compass missions
   compassMissions: () => request('/api/compass'),
   compassMission: (id) => request(`/api/compass/${encodeURIComponent(id)}`),
+
+  // Games
+  games: {
+    guessProphet: () => request('/api/games/guess-prophet'),
+  },
 
   // --- Quran Foundation Content API ---------------------------------------
   // Wrappers for /api/content/* (lesson hydration, chapters, audio, etc.)
@@ -211,5 +221,19 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ name }),
       }),
+  },
+
+  // --- OAuth2 auth (Quran Foundation User API) ----------------------------
+  // Login redirects the browser to QF's OAuth2 consent screen.
+  // All token handling is server-side — tokens never reach the browser.
+  // The React app only ever sees the session cookie + /api/auth/me.
+  auth: {
+    // Returns { authenticated, user, scopes } — safe to call on every load.
+    me: () => request('/api/auth/me'),
+    // Redirect to QF login. The page navigates away; on return the server
+    // has exchanged the code for tokens and set the httpOnly cookie.
+    login: () => { window.location.href = `${BASE}/api/auth/login`; },
+    // Server destroys the session; browser is redirected back to the app.
+    logout: () => { window.location.href = `${BASE}/api/auth/logout`; },
   },
 };

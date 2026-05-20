@@ -1,4 +1,5 @@
-import { Routes, Route, useLocation } from 'react-router-dom';
+import { Routes, Route, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 import { ProgressProvider } from './context/ProgressContext.jsx';
 import { Header } from './components/Header.jsx';
 import { BottomNav } from './components/BottomNav.jsx';
@@ -27,8 +28,19 @@ function isFullscreen(pathname) {
 }
 
 function Chrome({ children }) {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
+  const navigate = useNavigate();
   const fullscreen = isFullscreen(pathname);
+
+  // Clean up ?auth=success / ?auth_error=... query params left by the
+  // OAuth2 callback redirect, so they don't stick in the URL bar.
+  useEffect(() => {
+    const p = new URLSearchParams(search);
+    if (p.has('auth') || p.has('auth_error')) {
+      navigate(pathname, { replace: true });
+    }
+  }, [search, pathname, navigate]);
+
   return (
     <div className="min-h-screen flex flex-col bg-paper">
       {!fullscreen && <Header />}

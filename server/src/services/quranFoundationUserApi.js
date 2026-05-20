@@ -32,13 +32,18 @@ function endpoints() {
 
 export function isConfigured() {
   return Boolean(
-    process.env.QF_USER_ACCESS_TOKEN &&
-    (process.env.QF_USER_CLIENT_ID || process.env.QF_CLIENT_ID)
+    process.env.QF_CLIENT_ID &&
+    process.env.QF_CLIENT_SECRET
   );
 }
 
-async function call(method, pathname, { params, body } = {}) {
-  if (!isConfigured()) {
+// sessionToken: access token from the user's OAuth2 session (preferred).
+// Falls back to QF_USER_ACCESS_TOKEN env var for static/dev tokens.
+async function call(method, pathname, { params, body, sessionToken } = {}) {
+  const token = sessionToken || process.env.QF_USER_ACCESS_TOKEN;
+  const clientId = process.env.QF_USER_CLIENT_ID || process.env.QF_CLIENT_ID;
+
+  if (!token || !clientId) {
     const err = new Error('QF_USER_NOT_CONFIGURED');
     err.code = 'QF_USER_NOT_CONFIGURED';
     throw err;
@@ -55,9 +60,8 @@ async function call(method, pathname, { params, body } = {}) {
   const res = await fetch(url, {
     method,
     headers: {
-      'x-auth-token': process.env.QF_USER_ACCESS_TOKEN,
-      'x-client-id':
-        process.env.QF_USER_CLIENT_ID || process.env.QF_CLIENT_ID,
+      'x-auth-token': token,
+      'x-client-id': clientId,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     },
@@ -74,100 +78,82 @@ async function call(method, pathname, { params, body } = {}) {
 }
 
 // --- Bookmarks --------------------------------------------------------------
-//   GET    /bookmarks
-//   POST   /bookmarks
-//   DELETE /bookmarks/{id}
 export const bookmarks = {
-  list: (params = {}) =>
+  list: (params = {}, sessionToken) =>
     call('GET', '/bookmarks', {
       params: { mushafId: params.mushafId || 5, type: params.type || 'ayah', ...params },
+      sessionToken,
     }),
-  // POST body per docs: { type, mushafId, key (surah), verseNumber }
-  add: ({ chapterId, ayahNumber, mushafId = 5 }) =>
+  add: ({ chapterId, ayahNumber, mushafId = 5 }, sessionToken) =>
     call('POST', '/bookmarks', {
       body: { type: 'ayah', mushafId, key: chapterId, verseNumber: ayahNumber },
+      sessionToken,
     }),
-  remove: (id) => call('DELETE', `/bookmarks/${id}`),
+  remove: (id, sessionToken) => call('DELETE', `/bookmarks/${id}`, { sessionToken }),
 };
 
-// --- Notes (reflections) ----------------------------------------------------
-//   GET    /notes
-//   POST   /notes
-//   PATCH  /notes/{id}
-//   DELETE /notes/{id}
+// --- Notes ------------------------------------------------------------------
 export const notes = {
-  list: (params = {}) => call('GET', '/notes', { params }),
-  add: ({ ayahKey, body, tags = [] }) =>
-    call('POST', '/notes', { body: { key: ayahKey, body, tags } }),
-  update: (id, patch) => call('PATCH', `/notes/${id}`, { body: patch }),
-  remove: (id) => call('DELETE', `/notes/${id}`),
+  list: (params = {}, sessionToken) => call('GET', '/notes', { params, sessionToken }),
+  add: ({ ayahKey, body, tags = [] }, sessionToken) =>
+    call('POST', '/notes', { body: { key: ayahKey, body, tags }, sessionToken }),
+  update: (id, patch, sessionToken) => call('PATCH', `/notes/${id}`, { body: patch, sessionToken }),
+  remove: (id, sessionToken) => call('DELETE', `/notes/${id}`, { sessionToken }),
 };
 
 // --- Goals ------------------------------------------------------------------
-//   GET  /goals
-//   POST /goals
 export const goals = {
-  list: () => call('GET', '/goals'),
-  set: ({ type, target, unit }) =>
-    call('POST', '/goals', { body: { type, target, unit } }),
+  list: (sessionToken) => call('GET', '/goals', { sessionToken }),
+  set: ({ type, target, unit }, sessionToken) =>
+    call('POST', '/goals', { body: { type, target, unit }, sessionToken }),
 };
 
 // --- Reading Sessions -------------------------------------------------------
-// Track listen/follow (NOT used to replace recitation verification).
-//   GET  /reading-sessions
-//   POST /reading-sessions
 export const readingSessions = {
-  list: (params = {}) => call('GET', '/reading-sessions', { params }),
-  start: ({ ayahKey, durationSeconds, source = 'listen' }) =>
+  list: (params = {}, sessionToken) => call('GET', '/reading-sessions', { params, sessionToken }),
+  start: ({ ayahKey, durationSeconds, source = 'listen' }, sessionToken) =>
     call('POST', '/reading-sessions', {
       body: { ayah_key: ayahKey, duration_seconds: durationSeconds, source },
+      sessionToken,
     }),
 };
 
 // --- Activity Days ----------------------------------------------------------
-//   GET /activity-days
 export const activityDays = {
-  list: (params = {}) => call('GET', '/activity-days', { params }),
+  list: (params = {}, sessionToken) => call('GET', '/activity-days', { params, sessionToken }),
 };
 
 // --- Streaks ----------------------------------------------------------------
-//   GET /streaks
 export const streaks = {
-  get: () => call('GET', '/streaks'),
+  get: (sessionToken) => call('GET', '/streaks', { sessionToken }),
 };
 
 // --- Collections ------------------------------------------------------------
-//   GET  /collections
-//   POST /collections
 export const collections = {
-  list: () => call('GET', '/collections'),
-  create: ({ name }) => call('POST', '/collections', { body: { name } }),
-  addBookmark: (collectionId, { chapterId, ayahNumber, mushafId = 5 }) =>
+  list: (sessionToken) => call('GET', '/collections', { sessionToken }),
+  create: ({ name }, sessionToken) => call('POST', '/collections', { body: { name }, sessionToken }),
+  addBookmark: (collectionId, { chapterId, ayahNumber, mushafId = 5 }, sessionToken) =>
     call('POST', `/collections/${collectionId}/bookmarks`, {
       body: { type: 'ayah', mushafId, key: chapterId, verseNumber: ayahNumber },
+      sessionToken,
     }),
 };
 
 // --- Tags -------------------------------------------------------------------
-//   GET  /tags
-//   POST /tags
 export const tags = {
-  list: () => call('GET', '/tags'),
-  create: ({ name }) => call('POST', '/tags', { body: { name } }),
+  list: (sessionToken) => call('GET', '/tags', { sessionToken }),
+  create: ({ name }, sessionToken) => call('POST', '/tags', { body: { name }, sessionToken }),
 };
 
 // --- Preferences ------------------------------------------------------------
-//   GET /preferences
-//   PATCH /preferences
 export const preferences = {
-  get: () => call('GET', '/preferences'),
-  patch: (patch) => call('PATCH', '/preferences', { body: patch }),
+  get: (sessionToken) => call('GET', '/preferences', { sessionToken }),
+  patch: (patch, sessionToken) => call('PATCH', '/preferences', { body: patch, sessionToken }),
 };
 
 // --- Users ------------------------------------------------------------------
-//   GET /users/me
 export const users = {
-  me: () => call('GET', '/users/me'),
+  me: (sessionToken) => call('GET', '/users/me', { sessionToken }),
 };
 
 export default {

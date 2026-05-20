@@ -19,6 +19,9 @@ import classesRouter from './routes/classes.js';
 import compassRouter from './routes/compass.js';
 import contentRouter from './routes/content.js';
 import userRouter from './routes/user.js';
+import authRouter from './routes/auth.js';
+import gamesRouter from './routes/games.js';
+import { sessionMiddleware } from './services/sessionStore.js';
 import { asrHealth } from './services/recitation.js';
 
 import ttsRoutes from "./routes/tts.js";
@@ -29,11 +32,16 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
+app.use(cors({ origin: process.env.CLIENT_URL || 'http://localhost:5173', credentials: true }));
 // JSON limit covers transcripts; raw audio uploads bypass this via the
 // audio-specific middleware in routes/recitation.js.
 app.use(express.json({ limit: '2mb' }));
 app.use(morgan('dev'));
+
+// Session middleware — MUST come before routes so req.session is available.
+// Stores the QF OAuth2 tokens server-side in a signed httpOnly cookie.
+// Tokens are never sent to the browser; only a session ID cookie is set.
+app.use(sessionMiddleware);
 
 // Health check
 app.get('/api/health', async (_req, res) => {
@@ -52,6 +60,7 @@ app.get('/api/health', async (_req, res) => {
 });
 
 // API routes
+app.use('/api/auth', authRouter);   // OAuth2 login/callback/logout/me
 app.use('/api/quran', quranRouter);
 app.use('/api/quests', questsRouter);
 app.use('/api/recitation', recitationRouter);
@@ -63,6 +72,7 @@ app.use('/api/classes', classesRouter);
 app.use('/api/compass', compassRouter);
 app.use('/api/content', contentRouter);
 app.use('/api/user', userRouter);
+app.use('/api/games', gamesRouter);
 app.use("/api/tts", ttsRoutes);
 
 // Serve client build in production (single-deploy mode)

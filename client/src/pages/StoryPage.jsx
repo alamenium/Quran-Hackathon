@@ -267,9 +267,17 @@ useEffect(() => {
         {activityResults.order ? '✅ ordering' : '↻ ordering'} ·{' '}
         {activityResults.lesson ? '✅ lesson' : '↻ lesson'}
       </div>
-      <button onClick={() => navigate('/library')} className="duo-btn-primary w-full max-w-sm">
-        Back to Library
-      </button>
+      <div className="flex flex-col gap-3 w-full max-w-sm">
+        <button onClick={() => navigate('/library')} className="duo-btn-primary w-full">
+          Back to Library
+        </button>
+        <button
+          onClick={() => navigate('/tutor')}
+          className="duo-btn-ghost w-full text-sm"
+        >
+          💬 Ask Tutor about this story
+        </button>
+      </div>
     </div>
   );
 }

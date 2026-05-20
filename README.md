@@ -365,3 +365,202 @@ external paid services.
 - **Whisper**: OpenAI, MIT.
 - **faster-whisper**: SYSTRAN, <https://github.com/SYSTRAN/faster-whisper>, MIT.
 - App code in this repository is released under the MIT License.
+
+---
+
+## API Usage
+
+### Quran Foundation Content APIs
+
+**Reference:** https://api-docs.quran.foundation/docs/content_apis_versioned/4.0.0/content-apis/
+
+**Auth method:** OAuth2 Client Credentials (`grant_type=client_credentials`). The server fetches and caches the bearer token. Tokens never reach the browser.
+
+| QF Endpoint | Our Route | Purpose |
+|---|---|---|
+| `GET /verses/by_key/:verse_key` | `GET /api/content/lesson/:ayahKey` | Arabic text + translation + tafsir + audio for one ayah |
+| `GET /chapters/:id` | (used inside lesson) | Chapter name and metadata |
+| `GET /recitations/:id/by_ayah/:key` | `GET /api/content/audio/:ayahKey` | Audio URL |
+| `GET /resources/translations` | `GET /api/content/resources` | Available translation editions |
+| `GET /resources/tafsirs` | `GET /api/content/resources` | Available tafsir editions |
+| `GET /chapters` | `GET /api/content/chapters` | Full chapter list |
+
+**Where to see it in the app:**
+- Every quest lesson shows a `📡 Source: Quran Foundation Content API v4` badge (or `📡 Source: local cache` when offline)
+- Profile → About shows live vs offline status
+
+**Fallback:** If credentials are missing or the call fails, the app uses the bundled local dataset automatically. No blank screens.
+
+---
+
+### Quran Foundation User APIs
+
+**Reference:** https://api-docs.quran.foundation/docs/user_related_apis_versioned/1.0.0/user-related-apis/
+
+**Auth method:** OAuth2 Authorization Code + PKCE. Tokens are stored **server-side only** in a signed httpOnly session cookie. The browser never receives a token.
+
+**OAuth2 flow:**
+1. Tap "Sign in with Quran.Foundation" on the Profile page
+2. `GET /api/auth/login` → redirects to QF authorization server (PKCE + CSRF state)
+3. User authenticates on quran.com
+4. `GET /api/auth/callback` → validates state, exchanges code for tokens (server-to-server), stores in session
+5. All User API calls are made server-to-server; browser only sees a session cookie
+
+| QF User API | Our Route | Where called in the app |
+|---|---|---|
+| `POST /bookmarks` | `POST /api/user/bookmarks` | Toolkit Bookmarks tab — Save button |
+| `GET  /bookmarks` | `GET  /api/user/bookmarks` | Toolkit Bookmarks tab — list |
+| `POST /notes` | `POST /api/user/notes` | Quest reflect step — saves child's reflection |
+| `GET  /notes` | `GET  /api/user/notes` | Toolkit Reflections tab |
+| `POST /reading-sessions` | `POST /api/user/reading-sessions` | Quest Listen step — records listening activity |
+| `GET  /streaks` | `GET  /api/user/streaks` | Header streak chip (🔥) |
+| `GET/POST /goals` | `GET/POST /api/user/goals` | Daily goal tracking |
+| `GET  /users/me` | `GET  /api/user/me` | Profile page identity |
+| `GET/POST /collections` | `GET/POST /api/user/collections` | Grouped ayah collections |
+| `GET/POST /tags` | `GET/POST /api/user/tags` | Bookmark/note tags |
+
+**Where to see it in the app:**
+- Profile page → "Quran.Foundation Account" card — sign in button + auth status
+- Quest Listen step → fires a reading session to `/api/user/reading-sessions`
+- Quest Reflect step → saves reflection to `/api/user/notes`
+- Toolkit → Bookmarks tab → reads/writes `/api/user/bookmarks`
+
+**Fallback:** When not signed in (or credentials missing), all `/api/user/*` routes use the local/Firebase provider. Same JSON shape either way.
+
+### Required Environment Variables
+
+| Variable | Purpose |
+|---|---|
+| `QF_CLIENT_ID` | Content API + User API OAuth2 client ID |
+| `QF_CLIENT_SECRET` | OAuth2 client secret (server-side only, never sent to browser) |
+| `QF_REDIRECT_URI` | Must match what's registered in QF client — default `http://localhost:4000/api/auth/callback` |
+| `QF_SCOPES` | OAuth2 scopes — default `openid offline_access bookmark collection user` |
+| `SESSION_SECRET` | HMAC-SHA256 key for signing session ID cookies — generate a random 32-byte hex string |
+| `CLIENT_URL` | React app URL for post-login redirect — default `http://localhost:5173` |
+| `QF_ENV` | `prelive` (default) or `production` |
+
+---
+
+## API Usage
+
+This section documents the Quran Foundation API integrations required for hackathon compliance.
+
+### Quran Foundation Content APIs
+
+**Documentation:** https://api-docs.quran.foundation/docs/content_apis_versioned/4.0.0/content-apis/
+
+**Authentication:** OAuth2 `client_credentials` grant — the server exchanges `QF_CLIENT_ID` + `QF_CLIENT_SECRET` for a bearer token (cached, auto-refreshed). Tokens are server-side only.
+
+#### Endpoints used
+
+| QF Content API Endpoint | AyahQuest Backend Route | Purpose |
+|---|---|---|
+| `GET /verses/by_key/{verse_key}` (with `translations`, `tafsirs`) | `GET /api/content/lesson/:ayahKey` | Hydrates each quest with live Arabic text, English translation, and tafsir |
+| `GET /chapters/{id}` | Used inside `/api/content/lesson/:ayahKey` | Adds surah name and metadata to the lesson response |
+| `GET /recitations/{id}/by_ayah/{verse_key}` | `GET /api/content/audio/:ayahKey` | Provides recitation audio URL for the Listen step |
+| `GET /chapters` | `GET /api/content/chapters` | Full chapter list for the UI |
+| `GET /resources/translations` | `GET /api/content/resources` | Lists available translation editions |
+| `GET /resources/tafsirs` | `GET /api/content/resources` | Lists available tafsir editions |
+| `GET /resources/recitations` | `GET /api/content/resources` | Lists available reciters |
+| `GET /verses/by_page/{page}` | `GET /api/content/page/:n` | Page-based verse browsing |
+| `GET /verses/by_juz/{juz}` | `GET /api/content/juz/:n` | Juz-based verse browsing |
+
+#### Where the user sees Content API data
+
+- **Every Quest (Learn page):** The Quest screen calls `GET /api/content/lesson/:ayahKey` on load. When QF credentials are configured, the Arabic text, English translation (default: Dr. Mustafa Khattab — The Clear Quran, id 131), tafsir (default: Tafsir Ibn Kathir abridged, id 169), and audio (default: Mishary Alafasy, reciter id 7) all come from the live Content API. A small `📡 Source: Quran Foundation Content API v4` badge appears under the step label in the quest screen.
+- **Listen step:** Plays audio from the QF recitation CDN via the audio URL returned by the lesson endpoint.
+- **Profile page:** Shows "Quran Foundation Content APIs (live)" under About when credentials are set.
+
+#### Required env vars — Content API
+
+```
+QF_CLIENT_ID=          # OAuth2 client ID from Quran Foundation
+QF_CLIENT_SECRET=      # OAuth2 client secret
+QF_ENV=prelive         # Use "production" for live deployment
+QF_TRANSLATION_ID=131  # Translation resource ID (default: Clear Quran)
+QF_TAFSIR_ID=169       # Tafsir resource ID (default: Ibn Kathir abridged)
+QF_RECITER_ID=7        # Reciter ID (default: Mishary Alafasy)
+```
+
+#### Fallback behaviour
+
+When `QF_CLIENT_ID` / `QF_CLIENT_SECRET` are not set (or the API is unreachable), `/api/content/lesson/:ayahKey` falls back to the locally cached `quranContent.js` dataset, which was authored and verified using the quran.ai MCP connector. The badge shows `📡 Source: local cache`. The app runs fully without credentials.
+
+---
+
+### Quran Foundation User APIs
+
+**Documentation:** https://api-docs.quran.foundation/docs/user_related_apis_versioned/1.0.0/user-related-apis/
+
+**Authentication:** OAuth2 Authorization Code + PKCE (user auth). The flow is:
+
+1. User taps **"Connect Quran Foundation"** in the side drawer menu.
+2. Browser navigates to `GET /api/auth/login` → server builds the PKCE auth URL → browser redirects to QF's consent screen.
+3. After consent, QF redirects to `GET /api/auth/callback` → server exchanges the code for tokens using the PKCE verifier → tokens stored in a server-side session (never sent to browser) → browser gets an httpOnly signed session cookie.
+4. React app calls `GET /api/auth/me` to check login state (returns `{ authenticated, user }` — no tokens).
+5. All `/api/user/*` routes automatically use the session token to call the real QF User API.
+6. `GET /api/auth/logout` destroys the session.
+
+Tokens are stored **server-side only** in a signed, httpOnly session cookie. The React app never sees or stores a token.
+
+#### User API endpoints used
+
+| QF User API Endpoint | AyahQuest Backend Route | When it's called |
+|---|---|---|
+| `POST /bookmarks` | `POST /api/user/bookmarks` | When a user saves an ayah from the quest completion screen |
+| `GET /bookmarks` | `GET /api/user/bookmarks` | Toolkit page "Bookmarks" tab |
+| `DELETE /bookmarks/{id}` | `DELETE /api/user/bookmarks/:id` | Toolkit "Bookmarks" remove button |
+| `POST /notes` | `POST /api/user/notes` | When a child submits a reflection at the end of a quest step |
+| `GET /notes` | `GET /api/user/notes` | Toolkit page "Reflections" tab |
+| `GET /streaks` | `GET /api/user/streaks` | Profile page and header streak chip |
+| `GET /activity-days` | `GET /api/user/activity-days` | Profile page activity calendar |
+| `POST /reading-sessions` | `POST /api/user/reading-sessions` | When the user taps "Continue" on a Listen step in a quest |
+| `GET/POST /goals` | `GET/POST /api/user/goals` | Daily quest goal tracking |
+| `GET/PATCH /preferences` | `GET/POST /api/user/preferences` | User translation/tafsir preferences |
+| `GET/POST /collections` | `GET/POST /api/user/collections` | Grouped ayah collections (Gratitude, Mercy, etc.) |
+| `GET/POST /tags` | `GET/POST /api/user/tags` | Tags on notes and bookmarks |
+| `GET /users/me` | `GET /api/user/me` | User profile |
+
+#### Where the user sees User API data
+
+- **Side drawer:** Shows the logged-in QF user's name and "bookmarks & notes synced" when authenticated. Shows "Connect Quran Foundation" button when not logged in.
+- **Quest completion:** Reflection text is saved as a QF Note (with the ayah key and theme tag) when the QF session is active.
+- **Quest Listen step:** A Reading Session is posted to the QF User API recording which ayah was listened to.
+- **Toolkit — Bookmarks tab:** Displays bookmarks from QF User API when authenticated.
+- **Toolkit — Reflections tab:** Displays notes from QF User API when authenticated.
+- **Header streak chip:** Uses QF Streaks API when authenticated.
+- **`GET /api/user/status`:** Debug endpoint showing which provider is active (`quran-foundation` or `local`).
+
+#### Required env vars — User API
+
+```
+QF_CLIENT_ID=           # Same as Content API client ID (used for user auth too)
+QF_CLIENT_SECRET=       # Same as Content API client secret
+QF_REDIRECT_URI=http://localhost:4000/api/auth/callback   # Must be registered with QF
+CLIENT_URL=http://localhost:5173  # Where server redirects after login/logout
+SESSION_SECRET=         # Random secret for signing the httpOnly session cookie
+QF_SCOPES=openid offline_access bookmark collection user
+```
+
+#### Fallback behaviour
+
+When `QF_CLIENT_ID` / `QF_CLIENT_SECRET` are not set, or the user has not logged in:
+- All `/api/user/*` routes fall through to the `LocalFallbackProvider`.
+- Bookmarks, notes, goals, streaks, and reading sessions are stored in `server/data/users.json` (with optional Firebase Firestore sync).
+- The side drawer shows the "Connect Quran Foundation" button but it returns `503 QF_CLIENT_ID is not set`.
+- Everything works — the app runs fully offline without any QF credentials.
+
+---
+
+### Checking which provider is active
+
+```bash
+# Which content provider is active?
+curl http://localhost:4000/api/content/status
+
+# Which user provider is active (and is the session authenticated)?
+curl -b cookies.txt http://localhost:4000/api/user/status
+
+# Fetch a live lesson (with QF credentials):
+curl http://localhost:4000/api/content/lesson/1:1
+```

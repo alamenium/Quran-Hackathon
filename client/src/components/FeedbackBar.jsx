@@ -1,4 +1,6 @@
 // Bottom feedback bar. Shows result + Continue button.
+import { sfx } from '../lib/sfx.js';
+
 export function FeedbackBar({ status, title, body, onContinue }) {
   if (!status) return null;
   const positive = status === 'correct' || status === 'excellent' || status === 'good';
@@ -22,7 +24,7 @@ export function FeedbackBar({ status, title, body, onContinue }) {
         </div>
         <button
           type="button"
-          onClick={onContinue}
+          onClick={() => { sfx.click(); onContinue(); }}
           className={positive ? 'duo-btn-primary' : 'duo-btn'}
           style={{
             background: positive ? '#58CC02' : '#FF4B4B',

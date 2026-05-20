@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Character } from '../components/Character.jsx';
 import { SpeechBubble } from '../components/SpeechBubble.jsx';
 import { useProgress } from '../context/ProgressContext.jsx';
-import { listCharacters, characterImage } from '../lib/characters.js';
+import { listCharacters, characterImage, profileImage } from '../lib/characters.js';
 
 const STEPS = ['intro', 'character', 'ready'];
 
@@ -69,7 +69,7 @@ export default function WelcomePage() {
                 }`}
               >
                 <img
-                  src={characterImage(char.id, 'smile')}
+                  src={profileImage(char.id)}
                   alt={char.name}
                   className="w-32 h-32 mx-auto object-contain"
                 />

@@ -15,7 +15,7 @@ const local = {
   name: 'local',
   configured: () => true,
 
-  async users_me(userId) {
+  async users_me(userId, _req) {
     const u = await getUser(userId);
     return {
       id: u.id, character: u.character, xp: u.xp, hearts: u.hearts,
@@ -169,52 +169,69 @@ const local = {
 };
 
 // ---- QuranFoundationUserApiProvider ---------------------------------------
+// Uses the session access token (from OAuth2 login) if present, then falls
+// back to QF_USER_ACCESS_TOKEN env var (static dev token). Configured when
+// QF_CLIENT_ID + QF_CLIENT_SECRET are set (OAuth2 is possible) or when a
+// static token env var is present.
 const qf = {
   name: 'quran-foundation',
-  configured: () => qfUser.isConfigured(),
+  configured: () => qfUser.isConfigured() || Boolean(process.env.QF_USER_ACCESS_TOKEN),
 
-  users_me: () => qfUser.users.me(),
-  preferences_get: () => qfUser.preferences.get(),
-  preferences_patch: (_uid, patch) => qfUser.preferences.patch(patch),
-  goals_list: () => qfUser.goals.list(),
-  goals_set: (_uid, g) => qfUser.goals.set(g),
-  bookmarks_list: () => qfUser.bookmarks.list(),
-  bookmarks_add: (_uid, b) => qfUser.bookmarks.add(b),
-  bookmarks_remove: (_uid, id) => qfUser.bookmarks.remove(id),
-  notes_list: () => qfUser.notes.list(),
-  notes_add: (_uid, n) => qfUser.notes.add(n),
-  readingSessions_start: (_uid, r) => qfUser.readingSessions.start(r),
-  readingSessions_list: () => qfUser.readingSessions.list(),
-  activityDays_list: () => qfUser.activityDays.list(),
-  streaks_get: () => qfUser.streaks.get(),
-  collections_list: () => qfUser.collections.list(),
-  collections_create: (_uid, c) => qfUser.collections.create(c),
-  tags_list: () => qfUser.tags.list(),
-  tags_create: (_uid, t) => qfUser.tags.create(t),
+  // Token from session (set by /api/auth/callback) or static env fallback.
+  _token: (req) => req?.session?.qfAuth?.accessToken || process.env.QF_USER_ACCESS_TOKEN || null,
+
+  users_me: (uid, req) => qfUser.users.me(qf._token(req)),
+  preferences_get: (uid, req) => qfUser.preferences.get(qf._token(req)),
+  preferences_patch: (uid, patch, req) => qfUser.preferences.patch(patch, qf._token(req)),
+  goals_list: (uid, req) => qfUser.goals.list(qf._token(req)),
+  goals_set: (uid, g, req) => qfUser.goals.set(g, qf._token(req)),
+  bookmarks_list: (uid, req) => qfUser.bookmarks.list({}, qf._token(req)),
+  bookmarks_add: (uid, b, req) => qfUser.bookmarks.add(b, qf._token(req)),
+  bookmarks_remove: (uid, id, req) => qfUser.bookmarks.remove(id, qf._token(req)),
+  notes_list: (uid, req) => qfUser.notes.list({}, qf._token(req)),
+  notes_add: (uid, n, req) => qfUser.notes.add(n, qf._token(req)),
+  readingSessions_start: (uid, r, req) => qfUser.readingSessions.start(r, qf._token(req)),
+  readingSessions_list: (uid, req) => qfUser.readingSessions.list({}, qf._token(req)),
+  activityDays_list: (uid, req) => qfUser.activityDays.list({}, qf._token(req)),
+  streaks_get: (uid, req) => qfUser.streaks.get(qf._token(req)),
+  collections_list: (uid, req) => qfUser.collections.list(qf._token(req)),
+  collections_create: (uid, c, req) => qfUser.collections.create(c, qf._token(req)),
+  tags_list: (uid, req) => qfUser.tags.list(qf._token(req)),
+  tags_create: (uid, t, req) => qfUser.tags.create(t, qf._token(req)),
 };
 
 // ---- Picker ---------------------------------------------------------------
-export function provider() {
-  if (qf.configured()) return qf;
+// Chooses QF provider when a session token is present (from OAuth2 login)
+// OR when a static QF_USER_ACCESS_TOKEN env var is set. Otherwise local.
+export function provider(req) {
+  if (qf.configured()) {
+    const hasToken = req?.session?.qfAuth?.accessToken || process.env.QF_USER_ACCESS_TOKEN;
+    if (hasToken) return qf;
+  }
   return local;
 }
-export function providerInfo() {
+
+export function providerInfo(req) {
+  const p = provider(req);
   return {
-    active: provider().name,
+    active: p.name,
     qfConfigured: qf.configured(),
+    hasSessionToken: Boolean(req?.session?.qfAuth?.accessToken),
+    hasStaticToken: Boolean(process.env.QF_USER_ACCESS_TOKEN),
+    authFlow: 'OAuth2 Authorization Code + PKCE via /api/auth/login',
     fallback: 'local',
   };
 }
 
-// Helpful for routes that want graceful degradation:
-//   try QF first; on failure fall through to local.
-export async function withFallback(fn) {
-  const p = provider();
-  if (p.name === 'local') return fn(local);
+// Helpful for routes that want graceful degradation.
+// fn receives (provider, req) so the QF provider can access the session token.
+export async function withFallback(fn, req) {
+  const p = provider(req);
+  if (p.name === 'local') return fn(local, req);
   try {
-    return await fn(p);
+    return await fn(p, req);
   } catch (err) {
     console.warn(`[userProvider] QF failed, falling back to local: ${err.message}`);
-    return fn(local);
+    return fn(local, req);
   }
 }

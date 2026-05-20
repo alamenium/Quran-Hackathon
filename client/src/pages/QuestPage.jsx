@@ -21,6 +21,7 @@ import { Character } from '../components/Character.jsx';
 import { AudioButton } from '../components/AudioButton.jsx';
 import { SectionCompass } from '../components/SectionCompass.jsx';
 import { SourceBadge, SourceCard } from '../components/SourceBadge.jsx';
+import { sfx } from '../lib/sfx.js';
 
 // Build a flat array of steps from quest data.
 function buildSteps(quest) {
@@ -174,9 +175,11 @@ export default function QuestPage() {
 
     // Graded steps
     if (result.correct) {
+      sfx.correct();
       setScore(s => Math.min(100, s + Math.round(100 / Math.max(gradableCount, 1))));
       setFeedback({ status: 'correct', title: positiveTitle(), body: result.correctText || null });
     } else {
+      sfx.incorrect();
       setCollectedMistakes(m => [...m, {
         questionId: current.type + '_' + pos,
         prompt: current.prompt || current.question || '',
@@ -268,6 +271,7 @@ export default function QuestPage() {
         } catch { /* non-fatal */ }
       }
     } catch (err) { console.error('complete quest failed', err); }
+    sfx.complete();
     setCompleted(true);
   };
 
@@ -544,6 +548,7 @@ function ErrorScreen({ error, onBack }) {
 }
 
 function CompleteScreen({ quest, score, summary, onDone }) {
+  const navigate = useNavigate();
   const defaultMsg = `You spent time with the Quran today on the theme of ${quest.theme || 'learning'}. That is something worth continuing — see you tomorrow, in sha Allah.`;
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 text-center gap-5 max-w-screen-md mx-auto">
@@ -574,7 +579,15 @@ function CompleteScreen({ quest, score, summary, onDone }) {
         primaryAyah={quest.source?.primaryAyah || quest.verses?.[0]?.verse_key}
         theme={quest.theme}
       />
-      <button onClick={onDone} className="duo-btn-primary w-full max-w-sm">Continue</button>
+      <div className="flex flex-col gap-2 w-full max-w-sm">
+        <button onClick={onDone} className="duo-btn-primary w-full">Continue</button>
+        <button
+          onClick={() => navigate('/tutor')}
+          className="duo-btn-ghost w-full text-sm"
+        >
+          💬 Ask Tutor about this lesson
+        </button>
+      </div>
     </div>
   );
 }
