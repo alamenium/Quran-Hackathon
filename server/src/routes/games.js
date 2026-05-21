@@ -215,7 +215,9 @@ router.get('/guess-prophet', async (_req, res, next) => {
           source: {
             provider: sourceSummary.live > 0
               ? 'Quran Foundation Content API v4'
-              : 'local-cache',
+              : sourceSummary.local > 0
+                ? 'local-cache'
+                : 'none',
             translationResource: QF_DEFAULTS.translationId,
             fallbackUsed: sourceSummary.live === 0,
             liveAyahs: sourceSummary.live,
@@ -226,18 +228,19 @@ router.get('/guess-prophet', async (_req, res, next) => {
       })
     );
 
-    // If we couldn't get ayah text for ANY card from any source, return an
-    // error so the frontend can show a friendly "couldn't load" message.
+    // The game itself only needs clue/image/choices. Quran text is a
+    // best-effort enrichment from QF or local cache, so do NOT fail the
+    // endpoint just because fetchedAyahs is empty. Otherwise one QF/network
+    // hiccup makes the whole Prophet Game unusable.
     const totalAyahsFetched = cards.reduce(
       (sum, c) => sum + c.fetchedAyahs.length, 0
     );
-    if (totalAyahsFetched === 0) {
-      return res.status(503).json({
-        error: 'Quran ayah text could not be loaded from any source.',
-      });
-    }
 
-    res.json({ cards, generatedAt: new Date().toISOString() });
+    res.json({
+      cards,
+      generatedAt: new Date().toISOString(),
+      ayahFetchStatus: totalAyahsFetched > 0 ? 'loaded' : 'unavailable',
+    });
   } catch (err) {
     next(err);
   }

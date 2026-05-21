@@ -13,6 +13,7 @@ const EXCLUDES = [
     "*.vscode/*",
     "*node_modules/*",
     "*.venv/*",
+    '*.png',
     "*venv/*",
     "*env/*",
     "*__pycache__/*",

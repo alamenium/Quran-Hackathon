@@ -288,21 +288,6 @@ export default function QuestPage() {
       {/* Step label */}
       <StepLabel type={current?.type} />
 
-      {/* Content API source banner — shows where the runtime Quran content
-          for this lesson is coming from. Live = Quran Foundation v4.
-          Fallback = local cache (still authentic, just not from the network). */}
-      {hydratedLesson && (
-        <div className="px-4 -mt-2 mb-2">
-          <div className="text-[10px] font-extrabold uppercase tracking-wide text-ink-soft inline-flex items-center gap-1.5 bg-white border border-gray-100 rounded-full px-2.5 py-1">
-            <span className="text-brand-500" aria-hidden>📡</span>
-            <span>
-              {hydratedLesson.source?.fallbackUsed
-                ? 'Source: local cache (Content API unavailable)'
-                : `Source: ${hydratedLesson.source?.provider}`}
-            </span>
-          </div>
-        </div>
-      )}
 
       {/* Compass header — shown only for quests inside a themed section
           that defines a compass (currently: Gratitude Garden). One petal

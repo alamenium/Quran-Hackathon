@@ -195,17 +195,6 @@ export function GuessProphetGame({ onClose, embedded = false }) {
         {card.childFriendlyClue}
       </p>
 
-      {/* Source attribution — proves API path */}
-      <div className="flex items-center gap-1 text-[10px] text-ink-faint mb-4">
-        <span aria-hidden>📡</span>
-        <span>
-          {card.source.fallbackUsed
-            ? 'Source: local cache'
-            : 'Source: Quran Foundation Content API'}
-          {' · '}
-          {card.source.totalAyahs} ayat referenced
-        </span>
-      </div>
 
       {/* Answer choices */}
       <div className="grid gap-2 mb-4" role="radiogroup" aria-label="Choose the Prophet">

@@ -13,6 +13,10 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Right after `RUN pip install --no-cache-dir -r requirements.txt`
+RUN python -c "from faster_whisper import WhisperModel; \
+  WhisperModel('small', device='cpu', compute_type='int8')"
+
 COPY . .
 
 ENV PORT=5005
@@ -22,4 +26,5 @@ ENV ASR_MODEL_SIZE=small
 
 EXPOSE 5005
 
-CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "5005"]
+CMD python -m uvicorn main:app --host 0.0.0.0 --port ${PORT:-5005}
+

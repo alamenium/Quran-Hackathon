@@ -1,6 +1,6 @@
 // AyahQuest API server entry point.
 // Hosts: Quran content proxy, recitation verification, user progress.
-import 'dotenv/config';
+import dotenv from 'dotenv';
 import express from 'express';
 import cors from 'cors';
 import morgan from 'morgan';
@@ -8,26 +8,51 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { existsSync } from 'node:fs';
 
-import quranRouter from './routes/quran.js';
-import questsRouter from './routes/quests.js';
-import recitationRouter from './routes/recitation.js';
-import progressRouter from './routes/progress.js';
-import storiesRouter from './routes/stories.js';
-import diagnosticRouter from './routes/diagnostic.js';
-import aiRouter from './routes/ai.js';
-import classesRouter from './routes/classes.js';
-import compassRouter from './routes/compass.js';
-import contentRouter from './routes/content.js';
-import userRouter from './routes/user.js';
-import authRouter from './routes/auth.js';
-import gamesRouter from './routes/games.js';
-import { sessionMiddleware } from './services/sessionStore.js';
-import { asrHealth } from './services/recitation.js';
-
-import ttsRoutes from "./routes/tts.js";
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, '../..');
+
+// Load environment variables from both common locations.
+// This fixes workspace mode, where `npm run dev --workspace=server` makes
+// dotenv look inside server/.env instead of the project-root .env.
+dotenv.config({ path: path.join(projectRoot, '.env') });
+dotenv.config({ path: path.resolve(__dirname, '../.env'), override: false });
+
+const [
+  { default: quranRouter },
+  { default: questsRouter },
+  { default: recitationRouter },
+  { default: progressRouter },
+  { default: storiesRouter },
+  { default: diagnosticRouter },
+  { default: aiRouter },
+  { default: classesRouter },
+  { default: compassRouter },
+  { default: contentRouter },
+  { default: userRouter },
+  { default: authRouter },
+  { default: gamesRouter },
+  { sessionMiddleware },
+  { asrHealth },
+  { default: ttsRoutes },
+] = await Promise.all([
+  import('./routes/quran.js'),
+  import('./routes/quests.js'),
+  import('./routes/recitation.js'),
+  import('./routes/progress.js'),
+  import('./routes/stories.js'),
+  import('./routes/diagnostic.js'),
+  import('./routes/ai.js'),
+  import('./routes/classes.js'),
+  import('./routes/compass.js'),
+  import('./routes/content.js'),
+  import('./routes/user.js'),
+  import('./routes/auth.js'),
+  import('./routes/games.js'),
+  import('./services/sessionStore.js'),
+  import('./services/recitation.js'),
+  import('./routes/tts.js'),
+]);
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -73,7 +98,7 @@ app.use('/api/compass', compassRouter);
 app.use('/api/content', contentRouter);
 app.use('/api/user', userRouter);
 app.use('/api/games', gamesRouter);
-app.use("/api/tts", ttsRoutes);
+app.use('/api/tts', ttsRoutes);
 
 // Serve client build in production (single-deploy mode)
 const clientDist = path.resolve(__dirname, '../../client/dist');
@@ -113,4 +138,3 @@ app.listen(PORT, async () => {
   }
   console.log('');
 });
-

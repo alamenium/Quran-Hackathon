@@ -31,29 +31,62 @@ const router = Router();
 // Production:         https://oauth2.quran.foundation
 function qfOAuthBase() {
   return process.env.QF_ENV === 'production'
-    ? 'https://oauth2.quran.foundation'
-    : 'https://prelive-oauth2.quran.foundation';
+      ? 'https://oauth2.quran.foundation'
+      : 'https://prelive-oauth2.quran.foundation';
+}
+
+// Detects the backend URL for local dev and deployed Cloud Run.
+// OAuth redirect_uri must still be registered in the QF OAuth client dashboard.
+function getRequestBaseUrl(req) {
+  const forwardedProto = req.headers['x-forwarded-proto'];
+  const forwardedHost = req.headers['x-forwarded-host'];
+
+  const protoHeader = Array.isArray(forwardedProto)
+      ? forwardedProto[0]
+      : forwardedProto;
+
+  const hostHeader = Array.isArray(forwardedHost)
+      ? forwardedHost[0]
+      : forwardedHost;
+
+  const proto = (protoHeader || req.protocol || 'http').split(',')[0].trim();
+
+  const host = (
+      hostHeader ||
+      req.headers.host ||
+      `localhost:${process.env.PORT || 4000}`
+  )
+      .split(',')[0]
+      .trim();
+
+  return `${proto}://${host}`;
 }
 
 // Redirect URI: must match what's registered in the QF OAuth2 client.
-// Default: http://localhost:4000/api/auth/callback (suitable for dev).
-function redirectUri() {
-  return (
-    process.env.QF_REDIRECT_URI ||
-    `http://localhost:${process.env.PORT || 4000}/api/auth/callback`
-  );
+// If QF_REDIRECT_URI is empty/missing, it auto-detects local vs deployed URL.
+function redirectUri(req) {
+  if (process.env.QF_REDIRECT_URI) {
+    return process.env.QF_REDIRECT_URI;
+  }
+
+  return `${getRequestBaseUrl(req)}/api/auth/callback`;
 }
 
 // Client app URL to redirect back to after login/logout.
-function clientUrl() {
-  return process.env.CLIENT_URL || 'http://localhost:5173';
+// If CLIENT_URL is empty/missing, it redirects back to the same detected host.
+function clientUrl(req) {
+  if (process.env.CLIENT_URL) {
+    return process.env.CLIENT_URL;
+  }
+
+  return getRequestBaseUrl(req);
 }
 
 // Scopes required: openid (user identity) + offline_access (refresh token)
 //                  + bookmark + user (per QF User API scopes).
 const SCOPES = (
-  process.env.QF_SCOPES ||
-  'openid offline_access bookmark collection user'
+    process.env.QF_SCOPES ||
+    'openid offline_access bookmark collection user'
 ).trim();
 
 // ── PKCE helpers ────────────────────────────────────────────────────────────
@@ -62,6 +95,7 @@ const SCOPES = (
 function generateCodeVerifier() {
   return randomBytes(32).toString('base64url');
 }
+
 function generateCodeChallenge(verifier) {
   return createHash('sha256').update(verifier).digest('base64url');
 }
@@ -91,7 +125,7 @@ router.get('/login', (req, res) => {
   const url = new URL(`${qfOAuthBase()}/oauth2/auth`);
   url.searchParams.set('response_type', 'code');
   url.searchParams.set('client_id', process.env.QF_CLIENT_ID);
-  url.searchParams.set('redirect_uri', redirectUri());
+  url.searchParams.set('redirect_uri', redirectUri(req));
   url.searchParams.set('scope', SCOPES);
   url.searchParams.set('state', state);
   url.searchParams.set('nonce', nonce);
@@ -111,14 +145,14 @@ router.get('/callback', async (req, res) => {
 
     if (oauthError) {
       console.error('[auth] OAuth2 error from provider:', oauthError);
-      return res.redirect(`${clientUrl()}?auth_error=${encodeURIComponent(oauthError)}`);
+      return res.redirect(`${clientUrl(req)}?auth_error=${encodeURIComponent(oauthError)}`);
     }
 
     // CSRF state check
     const pending = req.session.oauth2Pending;
     if (!pending || pending.state !== state) {
       console.error('[auth] OAuth2 state mismatch — possible CSRF');
-      return res.redirect(`${clientUrl()}?auth_error=state_mismatch`);
+      return res.redirect(`${clientUrl(req)}?auth_error=state_mismatch`);
     }
 
     // Exchange authorization code for tokens.
@@ -127,14 +161,14 @@ router.get('/callback', async (req, res) => {
     const body = new URLSearchParams({
       grant_type: 'authorization_code',
       code,
-      redirect_uri: redirectUri(),
+      redirect_uri: redirectUri(req),
       client_id: process.env.QF_CLIENT_ID,
       code_verifier: pending.codeVerifier,
     });
 
     // Confidential client: authenticate with Basic auth (client_id:client_secret)
     const basicAuth = Buffer.from(
-      `${process.env.QF_CLIENT_ID}:${process.env.QF_CLIENT_SECRET}`
+        `${process.env.QF_CLIENT_ID}:${process.env.QF_CLIENT_SECRET}`
     ).toString('base64');
 
     const tokenRes = await fetch(tokenUrl, {
@@ -149,7 +183,7 @@ router.get('/callback', async (req, res) => {
     if (!tokenRes.ok) {
       const text = await tokenRes.text();
       console.error('[auth] Token exchange failed:', tokenRes.status, text);
-      return res.redirect(`${clientUrl()}?auth_error=token_exchange_failed`);
+      return res.redirect(`${clientUrl(req)}?auth_error=token_exchange_failed`);
     }
 
     const tokens = await tokenRes.json();
@@ -157,11 +191,11 @@ router.get('/callback', async (req, res) => {
 
     // Store tokens server-side in the session. NEVER send to browser.
     req.session.qfAuth = {
-      accessToken:  tokens.access_token,
+      accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token,
-      idToken:      tokens.id_token,
-      expiresAt:    Date.now() + (tokens.expires_in - 60) * 1000,
-      scope:        tokens.scope,
+      idToken: tokens.id_token,
+      expiresAt: Date.now() + (tokens.expires_in - 60) * 1000,
+      scope: tokens.scope,
     };
 
     // Extract safe user info from the ID token (JWT) without verifying
@@ -171,10 +205,10 @@ router.get('/callback', async (req, res) => {
       const [, payload] = tokens.id_token.split('.');
       const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
       req.session.qfUser = {
-        sub:       decoded.sub,
-        email:     decoded.email,
+        sub: decoded.sub,
+        email: decoded.email,
         firstName: decoded.given_name || decoded.first_name,
-        lastName:  decoded.family_name || decoded.last_name,
+        lastName: decoded.family_name || decoded.last_name,
       };
     } catch (e) {
       console.warn('[auth] Could not decode id_token:', e.message);
@@ -184,10 +218,10 @@ router.get('/callback', async (req, res) => {
     delete req.session.oauth2Pending;
 
     // Redirect back to the React app
-    res.redirect(`${clientUrl()}?auth=success`);
+    res.redirect(`${clientUrl(req)}?auth=success`);
   } catch (err) {
     console.error('[auth] Callback error:', err);
-    res.redirect(`${clientUrl()}?auth_error=server_error`);
+    res.redirect(`${clientUrl(req)}?auth_error=server_error`);
   }
 });
 
@@ -198,6 +232,7 @@ router.get('/me', (req, res) => {
   if (!req.session?.qfUser) {
     return res.json({ authenticated: false });
   }
+
   res.json({
     authenticated: true,
     user: req.session.qfUser,
@@ -209,7 +244,7 @@ router.get('/me', (req, res) => {
 // Destroys the server session and redirects home.
 router.get('/logout', (req, res) => {
   destroySession(req);
-  res.redirect(`${clientUrl()}`);
+  res.redirect(`${clientUrl(req)}`);
 });
 
 // ── Middleware helper ────────────────────────────────────────────────────────
@@ -231,9 +266,11 @@ export async function getSessionToken(req) {
       refresh_token: auth.refreshToken,
       client_id: process.env.QF_CLIENT_ID,
     });
+
     const basicAuth = Buffer.from(
-      `${process.env.QF_CLIENT_ID}:${process.env.QF_CLIENT_SECRET}`
+        `${process.env.QF_CLIENT_ID}:${process.env.QF_CLIENT_SECRET}`
     ).toString('base64');
+
     const res = await fetch(tokenUrl, {
       method: 'POST',
       headers: {
@@ -242,11 +279,14 @@ export async function getSessionToken(req) {
       },
       body,
     });
+
     if (!res.ok) throw new Error(`Refresh failed: ${res.status}`);
+
     const tokens = await res.json();
-    auth.accessToken  = tokens.access_token;
-    auth.expiresAt    = Date.now() + (tokens.expires_in - 60) * 1000;
+    auth.accessToken = tokens.access_token;
+    auth.expiresAt = Date.now() + (tokens.expires_in - 60) * 1000;
     if (tokens.refresh_token) auth.refreshToken = tokens.refresh_token;
+
     return auth.accessToken;
   } catch (err) {
     console.warn('[auth] Token refresh failed:', err.message);
