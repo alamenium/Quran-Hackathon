@@ -9,8 +9,10 @@
 //
 // GET /api/games/guess-prophet
 //   → returns 6 game cards, each with fetchedAyahs + fetchedTranslations
-//     drawn from QF Content API, plus a 1-sentence child-friendly clue
-//     derived from those translations.
+//     drawn from QF Content API (best-effort), plus a 1-sentence
+//     child-friendly clue derived from safe symbolic hints. The game
+//     itself is fully playable without ayah text — the ayahs are an
+//     enrichment, not a hard requirement.
 
 import { Router } from 'express';
 import {
@@ -130,6 +132,8 @@ function stripHtml(s) {
 }
 
 // ── Fetch all verses for one prophet, with fallback ────────────────────────
+// Returns best-effort ayah enrichment. Never throws — failures are absorbed
+// so the game card is always built and the round is always playable.
 async function fetchProphetVerses(prophet) {
   const fetchedAyahs = [];
   const fetchedTranslations = [];
@@ -152,6 +156,7 @@ async function fetchProphetVerses(prophet) {
           liveCount++;
         }
       } catch (err) {
+        // Swallow — fall through to local fallback. The round still plays.
         console.warn(`[games/guess-prophet] live fetch failed for ${ref}: ${err.message}`);
       }
     }
@@ -215,9 +220,7 @@ router.get('/guess-prophet', async (_req, res, next) => {
           source: {
             provider: sourceSummary.live > 0
               ? 'Quran Foundation Content API v4'
-              : sourceSummary.local > 0
-                ? 'local-cache'
-                : 'none',
+              : (sourceSummary.local > 0 ? 'local-cache' : 'none'),
             translationResource: QF_DEFAULTS.translationId,
             fallbackUsed: sourceSummary.live === 0,
             liveAyahs: sourceSummary.live,
@@ -228,19 +231,12 @@ router.get('/guess-prophet', async (_req, res, next) => {
       })
     );
 
-    // The game itself only needs clue/image/choices. Quran text is a
-    // best-effort enrichment from QF or local cache, so do NOT fail the
-    // endpoint just because fetchedAyahs is empty. Otherwise one QF/network
-    // hiccup makes the whole Prophet Game unusable.
-    const totalAyahsFetched = cards.reduce(
-      (sum, c) => sum + c.fetchedAyahs.length, 0
-    );
-
-    res.json({
-      cards,
-      generatedAt: new Date().toISOString(),
-      ayahFetchStatus: totalAyahsFetched > 0 ? 'loaded' : 'unavailable',
-    });
+    // The game is playable without ayah text — image, clue and answer
+    // choices are sufficient. Ayahs are an enrichment. We therefore always
+    // return 200 with the full set of cards rather than 503'ing the whole
+    // round just because the Quran Foundation API or the local cache had
+    // no entry for these specific references.
+    res.json({ cards, generatedAt: new Date().toISOString() });
   } catch (err) {
     next(err);
   }
